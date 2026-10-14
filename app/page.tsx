@@ -87,9 +87,15 @@ export default function Home() {
   }
 
   function startPeer(peerId: string, initiator: boolean) {
+    // Send to this peer one request at a time. Concurrent POSTs land in the
+    // mailbox out of order, and SDP applied out of order (a stale offer after
+    // a newer answer) breaks renegotiation when video starts or stops.
+    let outbox: Promise<void> = Promise.resolve();
     const ps = new PeerSession(initiator, {
       onSignal: (type: DescType, payload: string) => {
-        void sendSignal(sessionId, peerId, type, payload);
+        outbox = outbox
+          .then(() => sendSignal(sessionId, peerId, type, payload))
+          .catch(() => {});
       },
       onChat: (text) => addMessage(false, text),
       onControl: (ctrl) => handleControl(ctrl),
