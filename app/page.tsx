@@ -9,7 +9,7 @@ import VideoPanel from "./components/VideoPanel";
 import { join, leave, poll, sendSignal } from "@/lib/api";
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
 import { POLL_INTERVAL_MS } from "@/lib/presence";
-import { type PeerDot, type SignalMsg } from "@/lib/types";
+import { type PeerDot, type PollResponse, type SignalMsg } from "@/lib/types";
 
 type Conn =
   | { kind: "idle" }
@@ -21,6 +21,8 @@ type Conn =
 type VideoState = "none" | "requesting" | "incoming" | "active";
 
 const REQUEST_TIMEOUT_MS = 30_000;
+// After an accept, how long the data channel may take to open before we give up.
+const CONNECT_TIMEOUT_MS = 20_000;
 
 export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate");
@@ -51,6 +53,7 @@ export default function Home() {
   const peerRef = useRef<PeerSession | null>(null);
   const msgId = useRef(0);
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function showNotice(text: string) {
     setNotice(text);
@@ -63,6 +66,7 @@ export default function Home() {
 
   function teardown(message?: string) {
     if (requestTimer.current) clearTimeout(requestTimer.current);
+    if (connectTimer.current) clearTimeout(connectTimer.current);
     peerRef.current?.close();
     peerRef.current = null;
     setLocalStream(null);
@@ -71,6 +75,15 @@ export default function Home() {
     setMessages([]);
     setConn({ kind: "idle" });
     if (message) showNotice(message);
+  }
+
+  // The connection died underneath us: the peer closed their tab, the network
+  // dropped, or the channel never opened. Still send "end" — it releases both
+  // busy flags on the server, which nobody else is going to do now.
+  function dropConnection(ps: PeerSession, peerId: string, message: string) {
+    if (peerRef.current !== ps) return; // already torn down or replaced
+    void sendSignal(sessionId, peerId, "end");
+    teardown(message);
   }
 
   function startPeer(peerId: string, initiator: boolean) {
@@ -83,14 +96,21 @@ export default function Home() {
       onRemoteStream: (stream) => setRemoteStream(stream),
       onConnectionState: (state) => {
         if (state === "failed") {
-          teardown("Connection failed (network).");
+          dropConnection(ps, peerId, "Connection failed (network).");
         }
       },
       onChannelOpen: () => {
+        if (connectTimer.current) clearTimeout(connectTimer.current);
         setConn({ kind: "connected", peerId });
       },
+      onChannelClose: () => dropConnection(ps, peerId, "Stranger disconnected."),
     });
     peerRef.current = ps;
+    connectTimer.current = setTimeout(() => {
+      if (connRef.current.kind === "connecting") {
+        dropConnection(ps, peerId, "Couldn't connect. Try again.");
+      }
+    }, CONNECT_TIMEOUT_MS);
   }
 
   function handleControl(ctrl: PeerControl) {
@@ -265,9 +285,29 @@ export default function Home() {
     }
   }
 
-  const processSignalRef = useRef(processSignal);
+  function handlePoll(data: PollResponse) {
+    setPeers(data.peers);
+    for (const s of data.signals) processSignal(s);
+
+    // A request or handshake whose other side has left the map can never
+    // complete, so stop waiting instead of hanging until a timeout. (A live
+    // call is left alone: the P2P link can outlast a throttled tab's
+    // heartbeat, and a real departure closes the data channel anyway.)
+    const c = connRef.current;
+    if (c.kind === "idle" || c.kind === "connected") return;
+    if (data.peers.some((p) => p.id === c.peerId)) return;
+    if (c.kind === "incoming") {
+      setConn({ kind: "idle" });
+    } else if (c.kind === "requesting") {
+      teardown("They left.");
+    } else if (peerRef.current) {
+      dropConnection(peerRef.current, c.peerId, "Stranger disconnected.");
+    }
+  }
+
+  const handlePollRef = useRef(handlePoll);
   useEffect(() => {
-    processSignalRef.current = processSignal;
+    handlePollRef.current = handlePoll;
   });
 
   useEffect(() => {
@@ -279,8 +319,7 @@ export default function Home() {
       try {
         const data = await poll(sessionId);
         if (!active) return;
-        setPeers(data.peers);
-        for (const s of data.signals) processSignalRef.current(s);
+        handlePollRef.current(data);
       } catch {}
       if (active) timer = setTimeout(tick, POLL_INTERVAL_MS);
     };
