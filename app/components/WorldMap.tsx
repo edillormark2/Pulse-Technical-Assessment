@@ -5,7 +5,9 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { Map as MapboxMap, Marker } from "mapbox-gl";
 import type { PeerDot } from "@/lib/types";
 
-const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "pk.eyJ1IjoicHVsc2UtbWFwIiwiYSI6ImNrMDBkZW1vMDAwMDAwMDAifQ.AAAAAAAAAAAAAAAAAAAAAA";
+// Public (pk.*) token, inlined at build time. Deliberately no fallback: a
+// missing token must surface the setup hint below, not a silently blank map.
+const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 function dotColor(id: string): string {
   let hash = 0;
@@ -31,6 +33,7 @@ export default function WorldMap({
   const markersRef = useRef<Map<string, Marker>>(new Map());
   const meMarkerRef = useRef<Marker | null>(null);
   const [ready, setReady] = useState(false);
+  const [tokenRejected, setTokenRejected] = useState(false);
 
   // Marker click handlers are bound once, so read the live click handler +
   // connectability through refs (synced in an effect, never during render).
@@ -61,6 +64,13 @@ export default function WorldMap({
       });
       map.on("load", () => {
         if (!cancelled) setReady(true);
+      });
+      // An invalid or revoked token fails every style/tile request with 401.
+      map.on("error", (e) => {
+        const status = (e.error as { status?: number } | undefined)?.status;
+        if (!cancelled && (status === 401 || status === 403)) {
+          setTokenRejected(true);
+        }
       });
       mapRef.current = map;
     })();
@@ -157,10 +167,10 @@ export default function WorldMap({
     <div className="absolute inset-0">
       <div ref={containerRef} className="h-full w-full bg-zinc-900" />
 
-      {!TOKEN && (
+      {(!TOKEN || tokenRejected) && (
         <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
           <p className="max-w-md rounded-lg bg-zinc-800 p-4 text-sm text-zinc-200">
-            Set{" "}
+            {tokenRejected ? "Mapbox rejected the token. Check " : "Set "}
             <code className="text-emerald-400">NEXT_PUBLIC_MAPBOX_TOKEN</code> in{" "}
             <code>.env</code> to load the map.
           </p>
