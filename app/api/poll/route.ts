@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
   // 1) Heartbeat — refresh lastSeen for the caller only. Refreshing every row
   // here kept everyone "online" as long as a single client was still polling.
-  await prisma.presence.updateMany({
+  const heartbeat = await prisma.presence.updateMany({
     where: { id },
     data: { lastSeen: new Date(now) },
   });
@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
   }
 
   const response: PollResponse = {
+    present: heartbeat.count > 0,
     peers: peers.map((p) => ({
       id: p.id,
       lat: p.lat,

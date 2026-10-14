@@ -329,6 +329,12 @@ export default function Home() {
       try {
         const data = await poll(sessionId);
         if (!active) return;
+        if (!data.present && myLocation) {
+          // Our row is gone: reaped after a throttled background tab missed
+          // heartbeats, or deleted by the pagehide beacon before a bfcache
+          // restore. Nobody can see us until we join again.
+          await join(sessionId, myLocation.lat, myLocation.lng);
+        }
         handlePollRef.current(data);
       } catch {}
       if (active) timer = setTimeout(tick, POLL_INTERVAL_MS);
@@ -339,7 +345,7 @@ export default function Home() {
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [phase, sessionId]);
+  }, [phase, sessionId, myLocation]);
 
   useEffect(() => {
     if (!sessionId || phase !== "live") return;

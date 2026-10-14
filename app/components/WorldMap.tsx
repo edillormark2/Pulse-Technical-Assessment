@@ -145,6 +145,12 @@ export default function WorldMap({
             .setLngLat([peer.lng, peer.lat])
             .addTo(map);
           markers.set(peer.id, marker);
+        } else {
+          // A session that rejoined (e.g. after being reaped) gets a new offset.
+          const pos = marker.getLngLat();
+          if (pos.lng !== peer.lng || pos.lat !== peer.lat) {
+            marker.setLngLat([peer.lng, peer.lat]);
+          }
         }
         marker.getElement().style.opacity = peer.busy ? "0.35" : "1";
       }
