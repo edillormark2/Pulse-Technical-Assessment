@@ -244,6 +244,10 @@ export default function Home() {
           if (requestTimer.current) clearTimeout(requestTimer.current);
           startPeer(sig.fromId, true);
           setConn({ kind: "connecting", peerId: sig.fromId });
+        } else if (c.kind === "idle") {
+          // They accepted just as we cancelled or timed out. The server has
+          // already marked us both busy, so hang up to release us both.
+          void sendSignal(sessionId, sig.fromId, "end");
         }
         break;
       }
