@@ -16,10 +16,14 @@ export default defineConfig({
     path: path.join("prisma", "migrations"),
   },
   datasource: {
+    // CLI connection only (migrate / db push); the app connects through the
+    // adapter in lib/prisma.ts with the pooled DATABASE_URL. Migrations need a
+    // direct connection, so prefer the unpooled URL the Neon integration sets.
+    //
     // Read directly instead of via `env()`, which throws when the variable is
     // unset. `prisma generate` (run on postinstall, before a .env exists) never
-    // connects, so it must not require DATABASE_URL; `db push` / `migrate`
-    // still fail with a clear error when it is missing.
-    url: process.env.DATABASE_URL,
+    // connects, so it must not require a URL; `db push` / `migrate` still fail
+    // with a clear error when it is missing.
+    url: process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL,
   },
 });
