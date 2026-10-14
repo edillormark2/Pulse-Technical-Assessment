@@ -28,6 +28,8 @@ export class PeerSession {
   private closed = false;
   private readonly cb: PeerCallbacks;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  // Incoming signals are applied strictly one at a time, in delivery order.
+  private signalChain: Promise<void> = Promise.resolve();
 
   constructor(initiator: boolean, cb: PeerCallbacks) {
     this.cb = cb;
@@ -85,11 +87,23 @@ export class PeerSession {
     };
   }
 
-  async handleSignal(type: DescType, payload: string) {
+  // A poll can deliver a whole batch at once (e.g. [offer, ice, ice]). Applied
+  // concurrently, the candidates raced the in-flight setRemoteDescription, got
+  // queued and were never applied, so ICE had nothing to connect with.
+  handleSignal(type: DescType, payload: string): Promise<void> {
+    this.signalChain = this.signalChain
+      .then(() => this.applySignal(type, payload))
+      .catch((err) => console.warn(`[pulse] failed to apply ${type}`, err));
+    return this.signalChain;
+  }
+
+  private async applySignal(type: DescType, payload: string) {
     if (this.closed) return;
     const data = JSON.parse(payload);
 
     if (type === "ice") {
+      // Candidates can also arrive before their description: they travel as
+      // separate HTTP requests that race each other to the server.
       if (!this.pc.remoteDescription) {
         this.pendingCandidates.push(data);
         return;
@@ -107,8 +121,10 @@ export class PeerSession {
     this.ignoreOffer = !this.polite && offerCollision;
     if (this.ignoreOffer) return;
 
-    await this.flushPendingCandidates();
     await this.pc.setRemoteDescription(desc);
+    // Queued candidates need the remote description, so apply them after it.
+    // (Flushing before it made every queued addIceCandidate fail.)
+    await this.flushPendingCandidates();
     if (desc.type === "offer") {
       await this.pc.setLocalDescription();
       if (this.pc.localDescription) {
