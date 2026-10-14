@@ -26,6 +26,8 @@ export class PeerSession {
   private makingOffer = false;
   private ignoreOffer = false;
   private localStream: MediaStream | null = null;
+  // The in-flight (or completed) camera request for the current video call.
+  private videoStart: Promise<MediaStream> | null = null;
   private closed = false;
   private readonly cb: PeerCallbacks;
   private pendingCandidates: RTCIceCandidateInit[] = [];
@@ -165,20 +167,35 @@ export class PeerSession {
     }
   }
 
-  async startVideo(): Promise<MediaStream> {
-    if (!this.localStream) {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
+  // Idempotent: concurrent callers share one getUserMedia request. Before,
+  // two quick starts opened the camera twice and leaked the first stream, and
+  // a stream granted after stop/close was never released (camera stayed on).
+  startVideo(): Promise<MediaStream> {
+    if (!this.videoStart) {
+      const attempt: Promise<MediaStream> = navigator.mediaDevices
+        .getUserMedia({ video: true, audio: true })
+        .then((stream) => {
+          if (this.closed || this.videoStart !== attempt) {
+            // Stopped or hung up while the permission prompt was open.
+            for (const track of stream.getTracks()) track.stop();
+            throw new Error("video was cancelled");
+          }
+          this.localStream = stream;
+          for (const track of stream.getTracks()) {
+            this.pc.addTrack(track, stream);
+          }
+          return stream;
+        });
+      attempt.catch(() => {
+        if (this.videoStart === attempt) this.videoStart = null;
       });
-      for (const track of this.localStream.getTracks()) {
-        this.pc.addTrack(track, this.localStream);
-      }
+      this.videoStart = attempt;
     }
-    return this.localStream;
+    return this.videoStart;
   }
 
   stopVideo() {
+    this.videoStart = null;
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) track.stop();
       for (const sender of this.pc.getSenders()) {
