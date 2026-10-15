@@ -8,7 +8,8 @@
     "vercel-build": "prisma generate && if [ \"$VERCEL_ENV\" = production ]; then prisma migrate deploy; fi && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "node --test \"lib/**/*.test.ts\""
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
