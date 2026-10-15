@@ -51,3 +51,104 @@ evidence.
   call state are whatever clients claim. Any client can send `accept` or `end` as anyone,
   since session ids double as credentials. Connections are STUN only (no TURN), as the
   README notes.
+
+## Phase 2 — Make it good
+
+### The idea: World Time
+
+- Pulse is about *who is awake right now*, so the interface became a **world-time dial**:
+  the globe sits inside a 24-hour day/night ring, your hour is always at 12 o'clock, and
+  everyone online is marked at *their* hour. Who is in daylight and who is awake in the
+  dark reads at a glance, like a watch face.
+- It refuses the category default (a dark map with glowing dots beside a glass chat
+  sidebar) and the three anti-goals agreed up front: no surveillance feel, nothing neon or
+  crypto, nothing corporate.
+- Process: product truth first (`PRODUCT.md`), then seven candidate directions. World Time
+  won, and each declined direction donated one rule (the six below). The shipped system,
+  tokens and rules are recorded in `DESIGN.md`.
+
+### The system
+
+- **Colour:** night-lacquer blues for the ground and the land, opaline silver for ink and
+  the day arc, and **signal red only for the live connection** (your call, their mark, the
+  arc between you). Text is at least 4.5:1 on every surface it sits on.
+- **Type:** condensed Archivo for the wordmark and every hour, in tabular figures so times
+  never jitter; Geist for everything else.
+- **The bezel:** a day/night band engraved with every third hour (dark ink on the day,
+  light on the night), your hour pinned at 12, people marked outside it at theirs.
+- **One state grammar** on the dial, the globe and every card: filled = free,
+  hollow = busy, grown = picked. Your own call goes hollow red (asking) → half red
+  (connecting) → full red (talking); pulsing red = someone asking you; a fading ring =
+  someone who just left. A legend keeps its own corner on desktop.
+
+### Six rules the build keeps
+
+1. **Measured reveal:** on arrival the hours light clockwise from yours, then people take
+   their places on the ring in hour order.
+2. **One lit pane:** red appears only for the live connection.
+3. **Scale is billing:** while you talk, their hour is the largest type on screen and
+   the map recedes; on the entry screen your own hour fills the ring.
+4. **Nothing jumps:** the entry ring is drawn from the same layout as the live dial, so
+   entering never moves it (the globe develops inside it). The panel column is reserved,
+   cards grow out of the edge nearest the dial, the globe only turns to someone hidden
+   on its far side, and the goodbye card keeps the chat's size.
+5. **Waits develop:** both sides watch a red hand sweep the 30-second window, and the
+   asker sees named stages driven by the real WebRTC state (asked → waiting for their
+   yes → opening a direct line), never a spinner.
+6. **Complete state grammar:** as above, identical everywhere.
+
+**Signature moment:** the call arc. On yes, a red arc draws along the ring from your
+hour to theirs; on goodbye it pulls back into your hour while the messages dissolve
+where they stood.
+
+### UX beyond the look
+
+- **Real day and night:** the globe shows the actual terminator, sunset through
+  nautical twilight. Each client now shares its UTC offset (validated on the server), so
+  "their morning / evening / night" follows the clock they actually see, and the real
+  sun adds dawn and dusk. Both ends of a call read the same hour the same way.
+- **Before you ask:** their hour, yours, the hours between you and the distance.
+- **Phones are first-class:** the dial spans the width and every card is a bottom sheet;
+  16 px inputs, safe areas, `dvh`, hover effects only on real pointers.
+- **Faster handshake:** polling drops to 400 ms only while a call is being set up.
+  Tapping Talk to an open chat now takes about 0.7 s locally, down from about 2 s.
+- **Accessibility:** the dial's marks are real buttons in clockwise order, labelled with
+  time, distance and state, so the dial is also the keyboard and screen-reader list. The
+  world behind a video goes `inert`, toggles report state with `aria-pressed`, and reduced
+  motion keeps only fades.
+- **Plain words:** "They said not now", "They left.", "Couldn't open a direct line.
+  Try again."
+- **Details:** a dial favicon and share image, themed selection, scrollbars and focus
+  rings, and Mapbox restyled into the palette with its logo kept clear of every panel.
+
+### How I checked it
+
+- A script drives two real sessions (desktop in Manila, phone in San Francisco) through a
+  whole conversation in headless Chromium against a production build, and captures every
+  state: entry, idle, zoomed, picked, calling, ringing, chat, video, goodbye.
+- The Impeccable detector found no anti-patterns. A fresh reviewer with no build context
+  then audited the captures against the direction. The first verdict was **fix**, with 8
+  material issues, among them:
+  - hour marks pairing up with dots at the globe's edge;
+  - "scale is billing" not honoured while talking;
+  - an incomplete state grammar;
+  - a ground darker than the named lacquer;
+  - two words for the same hour on either end of a call.
+
+  I fixed them in batches and recaptured each time. The final verdict was **ship**, which
+  covers those fixes plus three regressions the fixes introduced. One of those
+  regressions was worth catching: a ringed "asking you" mark that read as crosshairs on a
+  person.
+- Bugs the captures caught before shipping:
+  - The dial was hidden on phones. A minimum zoom kept the globe too big, and its size was
+    read from Mapbox's centre scale, but its visible disc is up to 20% smaller under
+    perspective.
+  - Utility classes were silently ignored, because the component CSS was unlayered.
+  - React was wiping Mapbox's own class off the map container.
+  - The goodbye card briefly rendered empty.
+
+### Left for later
+
+- Ideas the reviewer listed as headroom, not defects: a ring of reference cities around
+  the bezel, a red station-clock seconds hand for the 30-second wait, and a stronger
+  terminator.
