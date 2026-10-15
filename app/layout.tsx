@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import { Archivo, Geist } from "next/font/google";
 import "./globals.css";
 
@@ -46,11 +47,14 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Render per request: each page view carries a fresh CSP nonce (proxy.ts),
+  // which a page prerendered at build time could not.
+  await connection();
   return (
     <html lang="en" className={`${geist.variable} ${archivo.variable} h-full`}>
       <body className="min-h-full flex flex-col">{children}</body>
