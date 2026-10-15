@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isValidLatLng } from "@/lib/geo";
-import { newToken, hashToken } from "@/lib/server/auth";
+import { hashToken, newToken } from "@/lib/server/token";
 import { allow } from "@/lib/server/rate-limit";
 import { JOIN_LIMIT } from "@/lib/server/limits";
 import { fail, networkKey, ok, readJson, sameOrigin } from "@/lib/server/http";
