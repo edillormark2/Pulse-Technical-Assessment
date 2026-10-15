@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { DemoButton } from "./DemoVideo";
 import Legend from "./Legend";
 
 /**
@@ -43,6 +44,7 @@ export default function IdleNote({
           stored; closing this tab removes you.
         </p>
       )}
+      <DemoButton className={compact ? "mt-4" : "mt-7"} />
     </div>
   );
 }

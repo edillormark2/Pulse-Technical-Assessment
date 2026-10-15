@@ -216,6 +216,97 @@
     color: #fff;
   }
 
+  /* The demo: a quiet pill whose play disc breathes out a few times when it
+     first appears, then rests; and a player that opens over the dial as
+     raised lacquer, never glass. */
+  .demo-chip {
+    display: inline-flex;
+    height: 44px;
+    align-items: center;
+    gap: 10px;
+    border-radius: 999px;
+    padding: 0 18px 0 6px;
+    background: var(--color-lacquer-800);
+    color: var(--color-opaline-50);
+    font-size: 15px;
+    font-weight: 500;
+    transition:
+      transform 140ms var(--ease-out),
+      background-color 160ms ease;
+  }
+  .demo-chip:active {
+    transform: scale(0.97);
+  }
+  .demo-chip__play {
+    position: relative;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--color-opaline-50);
+    color: var(--color-lacquer-900);
+    transition: transform 160ms var(--ease-out);
+  }
+  .demo-chip__play::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1.5px solid var(--color-opaline-50);
+    opacity: 0;
+  }
+  .demo-chip[data-ping] .demo-chip__play::after {
+    animation: demo-ping 1.6s var(--ease-out) 1.2s 3;
+  }
+  .demo-chip__time {
+    color: var(--color-opaline-400);
+    font-variant-numeric: tabular-nums;
+  }
+  .demo-dialog {
+    width: min(1100px, calc(100vw - 24px));
+    max-width: none;
+    max-height: none;
+    margin: auto;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: transparent;
+    color: var(--color-opaline-50);
+  }
+  .demo-dialog::backdrop {
+    background: rgb(10 20 40 / 0.92);
+  }
+  .demo-dialog[open] {
+    animation: demo-in 280ms var(--ease-out);
+  }
+  .demo-dialog[open]::backdrop {
+    animation: fade-in 240ms var(--ease-out);
+  }
+  .demo-dialog__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 2px 12px 6px;
+  }
+  .demo-dialog__video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 20px;
+    background: var(--color-lacquer-950);
+    box-shadow: var(--shadow-float);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .demo-chip:hover {
+      background: var(--color-lacquer-700);
+    }
+    .demo-chip:hover .demo-chip__play {
+      transform: scale(1.08);
+    }
+  }
+
   /* Steps of a wait, drawn like the dial's hour ticks so they never read as
      people: done, developing now, still to come. */
   .stage-tick {
@@ -572,6 +663,22 @@
 @keyframes tick-develop {
   to {
     opacity: 0.35;
+  }
+}
+@keyframes demo-ping {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.75);
+  }
+}
+@keyframes demo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
   }
 }
 @keyframes dissolve {

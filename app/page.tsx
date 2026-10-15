@@ -1,6 +1,7 @@
 "use client";
 
 import { Toaster, toast } from "sonner";
+import { DemoProvider } from "./components/DemoVideo";
 import EntryGate from "./components/EntryGate";
 import Live from "./components/Live";
 import { usePulse } from "@/lib/use-pulse";
@@ -12,7 +13,8 @@ export default function Home() {
   const { width } = useViewport();
 
   return (
-    <>
+    // The demo player steps aside the moment someone asks you to talk.
+    <DemoProvider yieldTo={pulse.conn.kind === "incoming"}>
       {pulse.phase === "gate" ? <EntryGate onReady={pulse.enter} /> : <Live pulse={pulse} />}
       <Toaster
         position={width >= 768 ? "top-right" : "top-center"}
@@ -29,6 +31,6 @@ export default function Home() {
           },
         }}
       />
-    </>
+    </DemoProvider>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { WarningCircle } from "@phosphor-icons/react";
+import { DemoButton } from "./DemoVideo";
 import Dial from "./Dial";
 import HourFace from "./HourFace";
 import { localUtcOffset } from "@/lib/api";
@@ -118,6 +119,7 @@ export default function EntryGate({ onReady }: { onReady: (lat: number, lng: num
             Pulse uses your location to place you. Others see your dot <span className="whitespace-nowrap">1&ndash;3 km</span> away, and
             nothing is kept: closing the tab removes you.
           </p>
+          <DemoButton className="mt-5 md:mt-6" />
         </div>
       </section>
     </main>
