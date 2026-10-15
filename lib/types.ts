@@ -28,17 +28,30 @@ export interface PublicSelf {
 
 export interface SignalMsg {
   id: string;
-  fromId: string;
-  toId: string;
+  fromId: string; // set by the server from the sender's token, never claimed
   type: SignalType;
   payload: string | null;
   createdAt: string;
 }
 
+/** Why the server said "not now" on someone's behalf (a decline's payload). */
+export type DeclineReason = "busy" | "away";
+
+/** Your side of a call, as the server records it. */
+export interface CallState {
+  peerId: string;
+  state: "ringing" | "connected";
+}
+
 export interface PollResponse {
-  // False when the caller's presence row no longer exists (reaped or left):
-  // the client must join again to reappear on the map.
-  present: boolean;
   peers: PeerDot[];
   signals: SignalMsg[];
+  /** Your call as the server sees it; null when you are in none. */
+  call: CallState | null;
+}
+
+/** A new session: the public id everyone sees, and the secret only you hold. */
+export interface JoinResponse {
+  id: string;
+  token: string;
 }

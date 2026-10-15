@@ -4,10 +4,18 @@
 // machine (request → accept → WebRTC → chat → video) and cleanup on exit.
 // Components only render what it returns and call its actions.
 import { useEffect, useRef, useState } from "react";
-import { join, leave, poll, sendSignal } from "@/lib/api";
+import { join, leave, localUtcOffset, poll, sendSignal, SessionGone, type Session } from "@/lib/api";
+import { applyPrivacyOffset } from "@/lib/geo";
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
 import { HANDSHAKE_POLL_MS, POLL_INTERVAL_MS } from "@/lib/presence";
-import type { PeerDot, PollResponse, PublicSelf, SignalMsg } from "@/lib/types";
+import type {
+  DeclineReason,
+  PeerDot,
+  PollResponse,
+  PublicSelf,
+  SignalMsg,
+  SignalType,
+} from "@/lib/types";
 
 export type Conn =
   | { kind: "idle" }
@@ -34,21 +42,45 @@ const CONNECT_TIMEOUT_MS = 20_000;
 // up. Left alone, ICE only declares "failed" after ~30s of silence.
 const DISCONNECT_GRACE_MS = 5_000;
 
+/** What to tell someone whose ask came back "not now", by who said it. */
+const DECLINED: Record<DeclineReason | "them", string> = {
+  them: "They said not now.",
+  busy: "They\u2019re in another conversation.",
+  away: "They just left.",
+};
+
+function declineReason(payload: string | null): DeclineReason | "them" {
+  try {
+    const reason = (JSON.parse(payload ?? "null") as { reason?: unknown } | null)?.reason;
+    return reason === "busy" || reason === "away" ? reason : "them";
+  } catch {
+    return "them";
+  }
+}
+
+/** About a metre: more precision than a privacy-offset dot can use. */
+const round = (v: number) => Math.round(v * 1e5) / 1e5;
+
 export function usePulse({ notify }: { notify: (message: string) => void }) {
   const [phase, setPhase] = useState<"gate" | "live">("gate");
-  const [sessionId] = useState(() => crypto.randomUUID());
+  // Issued by the server when you join: a public id and a secret token. Held
+  // in a ref, in memory only; callbacks that outlive a render read it there.
+  const sessionRef = useRef<Session | null>(null);
   const [peers, setPeers] = useState<PeerDot[]>([]);
   // False until the first poll lands, so "nobody here" is never shown early.
   const [synced, setSynced] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  // Raw position: kept on this device only, to rejoin after being reaped.
-  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(
-    null,
-  );
-  // Public position: the privacy-offset spot everyone else sees.
-  const [me, setMe] = useState<PublicSelf | null>(null);
+  // Public position: the privacy-offset spot everyone else sees. It is chosen
+  // once on this device and reused on any rejoin; the raw position is never
+  // kept or sent.
+  const [me, _setMe] = useState<PublicSelf | null>(null);
+  const meRef = useRef<PublicSelf | null>(null);
+  const setMe = (v: PublicSelf | null) => {
+    meRef.current = v;
+    _setMe(v);
+  };
   // The other end of the current connection, kept even if they drop off the
   // presence list mid-call (a throttled tab can miss heartbeats).
   const [livePeer, setLivePeer] = useState<PeerDot | null>(null);
@@ -91,6 +123,12 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   useEffect(() => {
     notifyRef.current = notify;
   });
+
+  /** Send a signal as this session; the server reads who we are from the token. */
+  function signal(to: string, type: SignalType, payload?: string): Promise<void> {
+    const session = sessionRef.current;
+    return session ? sendSignal(session, to, type, payload) : Promise.resolve();
+  }
 
   function addMessage(mine: boolean, text: string) {
     messagesRef.current = [
@@ -135,7 +173,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   // busy flags on the server, which nobody else is going to do now.
   function dropConnection(ps: PeerSession, peerId: string, message: string) {
     if (peerRef.current !== ps) return; // already torn down or replaced
-    void sendSignal(sessionId, peerId, "end");
+    void signal(peerId, "end");
     teardown(message);
   }
 
@@ -148,7 +186,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     const ps = new PeerSession(initiator, {
       onSignal: (type: DescType, payload: string) => {
         outbox = outbox
-          .then(() => sendSignal(sessionId, peerId, type, payload))
+          .then(() => signal(peerId, type, payload))
           .catch(() => {});
       },
       onChat: (text) => addMessage(false, text),
@@ -225,14 +263,14 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     if (connRef.current.kind !== "idle") return;
     setConn({ kind: "requesting", peerId });
     setLivePeer(peers.find((p) => p.id === peerId) ?? null);
-    void sendSignal(sessionId, peerId, "request");
+    void signal(peerId, "request");
     pollNow.current(); // switch to the handshake cadence now
     requestTimer.current = setTimeout(() => {
       if (
         connRef.current.kind === "requesting" &&
         connRef.current.peerId === peerId
       ) {
-        void sendSignal(sessionId, peerId, "end");
+        void signal(peerId, "end");
         teardown("No answer this time.");
       }
     }, REQUEST_TIMEOUT_MS);
@@ -240,7 +278,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
 
   function cancelRequest() {
     if (connRef.current.kind === "requesting") {
-      void sendSignal(sessionId, connRef.current.peerId, "end");
+      void signal(connRef.current.peerId, "end");
     }
     teardown();
   }
@@ -248,7 +286,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   // Become the callee for `peerId`: get ready for their offer, then accept.
   function acceptFrom(peerId: string) {
     startPeer(peerId, false);
-    void sendSignal(sessionId, peerId, "accept");
+    void signal(peerId, "accept");
     setConn({ kind: "connecting", peerId });
     pollNow.current(); // their offer is on its way
   }
@@ -260,14 +298,14 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
 
   function declineIncoming() {
     if (connRef.current.kind !== "incoming") return;
-    void sendSignal(sessionId, connRef.current.peerId, "decline");
+    void signal(connRef.current.peerId, "decline");
     setConn({ kind: "idle" });
   }
 
   function endConnection() {
     const c = connRef.current;
     if (c.kind === "connecting" || c.kind === "connected") {
-      void sendSignal(sessionId, c.peerId, "end");
+      void signal(c.peerId, "end");
     }
     teardown();
   }
@@ -340,12 +378,12 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
           // We tapped each other at the same moment. Declining both requests
           // would turn away two people who both want to talk, so exactly one
           // side (the smaller id) accepts and the other waits for that accept.
-          if (sessionId < sig.fromId) {
+          if ((sessionRef.current?.id ?? "") < sig.fromId) {
             if (requestTimer.current) clearTimeout(requestTimer.current);
             acceptFrom(sig.fromId);
           }
         } else {
-          void sendSignal(sessionId, sig.fromId, "decline");
+          void signal(sig.fromId, "decline");
         }
         break;
       }
@@ -358,7 +396,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         } else if (c.kind === "idle") {
           // They accepted just as we cancelled or timed out. The server has
           // already marked us both busy, so hang up to release us both.
-          void sendSignal(sessionId, sig.fromId, "end");
+          void signal(sig.fromId, "end");
         }
         break;
       }
@@ -366,7 +404,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         const c = connRef.current;
         if (c.kind === "requesting" && c.peerId === sig.fromId) {
           if (requestTimer.current) clearTimeout(requestTimer.current);
-          teardown("They said not now.");
+          teardown(DECLINED[declineReason(sig.payload)]);
         }
         break;
       }
@@ -412,6 +450,19 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
       if (other) setLivePeer(other);
     }
 
+    // The server is the record of who is talking to whom. If our call is gone
+    // there (they hung up or left, and the goodbye was lost), end it here too.
+    const call = data.call;
+    const live = connRef.current;
+    if ((live.kind === "connecting" || live.kind === "connected") && call?.peerId !== live.peerId) {
+      if (peerRef.current) dropConnection(peerRef.current, live.peerId, "They left.");
+      return;
+    }
+    if (live.kind === "incoming" && call?.peerId !== live.peerId) {
+      setConn({ kind: "idle" });
+      return;
+    }
+
     // A request or handshake whose other side has left the map can never
     // complete, so stop waiting instead of hanging until a timeout. (A live
     // call is left alone: the P2P link can outlast a throttled tab's
@@ -428,13 +479,27 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     }
   }
 
+  // The server no longer knows this session (it slept for many minutes, or a
+  // beacon removed it before a back/forward restore). Any call went with it;
+  // end ours and come back under a new session at the same public spot.
+  async function rejoin() {
+    if (connRef.current.kind !== "idle") teardown("The connection dropped.");
+    const spot = meRef.current;
+    if (!spot) return;
+    try {
+      sessionRef.current = await join(spot.lat, spot.lng);
+    } catch {}
+  }
+
   const handlePollRef = useRef(handlePoll);
+  const rejoinRef = useRef(rejoin);
   useEffect(() => {
     handlePollRef.current = handlePoll;
+    rejoinRef.current = rejoin;
   });
 
   useEffect(() => {
-    if (phase !== "live" || !sessionId) return;
+    if (phase !== "live") return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     // One poll at a time: two in flight could drain the mailbox into two
@@ -450,17 +515,14 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
       inFlight = true;
       if (timer) clearTimeout(timer);
       try {
-        const data = await poll(sessionId);
-        if (!active) return;
-        if (!data.present && myLocation) {
-          // Our row is gone: reaped after a throttled background tab missed
-          // heartbeats, or deleted by the pagehide beacon before a bfcache
-          // restore. Nobody can see us until we join again.
-          const self = await join(sessionId, myLocation.lat, myLocation.lng);
-          if (active) setMe(self);
+        const session = sessionRef.current;
+        if (session) {
+          const data = await poll(session);
+          if (!active) return;
+          handlePollRef.current(data);
         }
-        handlePollRef.current(data);
-      } catch {
+      } catch (error) {
+        if (error instanceof SessionGone && active) await rejoinRef.current();
       } finally {
         inFlight = false;
       }
@@ -478,25 +540,27 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
       if (timer) clearTimeout(timer);
       pollNow.current = () => {};
     };
-  }, [phase, sessionId, myLocation]);
+  }, [phase]);
 
   // pagehide is the one reliable "this page is going away" event (it also
   // fires on mobile and bfcache); a beforeunload listener only sent a second,
   // racing beacon and can make the page ineligible for the bfcache.
   useEffect(() => {
-    if (!sessionId || phase !== "live") return;
+    if (phase !== "live") return;
     const onLeave = () => {
-      const c = connRef.current;
-      leave(sessionId, c.kind === "idle" ? undefined : c.peerId);
+      if (sessionRef.current) leave(sessionRef.current);
     };
     window.addEventListener("pagehide", onLeave);
     return () => window.removeEventListener("pagehide", onLeave);
-  }, [sessionId, phase]);
+  }, [phase]);
 
   /** Join the map. Rejects when the server can't be reached. */
   async function enter(lat: number, lng: number) {
-    const self = await join(sessionId, lat, lng);
-    setMyLocation({ lat, lng });
+    // The raw position stays on this device. Only a spot 1–3 km away is sent,
+    // chosen once, so rejoining later cannot be averaged back to the truth.
+    const spot = applyPrivacyOffset(lat, lng);
+    const self: PublicSelf = { lat: round(spot.lat), lng: round(spot.lng), utcOffset: localUtcOffset() };
+    sessionRef.current = await join(self.lat, self.lng);
     setMe(self);
     setPhase("live");
   }

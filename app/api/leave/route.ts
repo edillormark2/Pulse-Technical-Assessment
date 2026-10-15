@@ -1,49 +1,27 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { authenticate } from "@/lib/server/auth";
+import { callOf, deliver } from "@/lib/server/calls";
+import { fail, ok, readJson, sameOrigin } from "@/lib/server/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/leave — body { id, peerId? }. Removes the presence row and any
-// pending signals to/from this user, then ends the call with `peerId` if one
-// was in progress. Called via navigator.sendBeacon on tab close, so the body
-// may arrive as text — parse defensively.
+// POST /api/leave — body { token }. Sent with navigator.sendBeacon when the tab
+// closes, which cannot set headers, so the token travels in the body. Removes
+// the caller from the map; their call (if any) and their mailbox go with them,
+// and whoever they were talking to is told the call is over.
 export async function POST(request: NextRequest) {
-  let id: unknown;
-  let peerId: unknown;
-  try {
-    const text = await request.text();
-    const body = text ? JSON.parse(text) : null;
-    id = body?.id;
-    peerId = body?.peerId;
-  } catch {
-    id = undefined;
-  }
+  if (!sameOrigin(request)) return fail(403, "forbidden");
+  const body = await readJson(request);
+  const me = await authenticate(request, body);
+  if (!me) return fail(401, "unknown session");
 
-  if (typeof id !== "string" || !id) {
-    return Response.json({ error: "invalid id" }, { status: 400 });
-  }
+  const call = await callOf(me.id);
+  await prisma.presence.deleteMany({ where: { id: me.id } });
+  // A closing tab drops its WebRTC connection without telling the other side;
+  // say goodbye on the leaver's behalf.
+  if (call) await deliver(me.id, call.peerId, "end");
 
-  // Independent cleanup deletes — no atomicity needed (and interactive
-  // transactions are unreliable over a PgBouncer pooler).
-  await prisma.signal.deleteMany({
-    where: { OR: [{ toId: id }, { fromId: id }] },
-  });
-  await prisma.presence.deleteMany({ where: { id } });
-
-  // A closing tab drops its WebRTC connection without telling the other side,
-  // which would otherwise sit in a frozen call (camera on) until ICE gives up
-  // ~30s later. Say goodbye on the leaver's behalf, after the cleanup above so
-  // this "end" is not deleted with the rest.
-  if (typeof peerId === "string" && peerId && peerId !== id) {
-    await prisma.signal.create({
-      data: { fromId: id, toId: peerId, type: "end", payload: null },
-    });
-    await prisma.presence.updateMany({
-      where: { id: peerId },
-      data: { busy: false },
-    });
-  }
-
-  return Response.json({ ok: true });
+  return ok();
 }

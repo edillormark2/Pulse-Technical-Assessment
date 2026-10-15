@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { applyPrivacyOffset, isValidLatLng } from "@/lib/geo";
+import { isValidLatLng } from "@/lib/geo";
+import { newToken, hashToken } from "@/lib/server/auth";
+import { allow } from "@/lib/server/rate-limit";
+import { JOIN_LIMIT } from "@/lib/server/limits";
+import { fail, networkKey, ok, readJson, sameOrigin } from "@/lib/server/http";
+import type { JoinResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,50 +17,41 @@ function isValidUtcOffset(v: unknown): v is number {
   );
 }
 
-// POST /api/join — body { id, lat, lng, utcOffset? } (raw coords).
-// Applies a 1–3 km privacy offset and upserts the presence row. Raw
-// coordinates are never stored. Responds with the offset position, so the
-// client can show its owner exactly where everyone else sees them.
+/** About a metre: more precision than a privacy-offset dot can use. */
+const round = (v: number) => Math.round(v * 1e5) / 1e5;
+
+// POST /api/join — body { lat, lng, utcOffset? }, already privacy-offset on
+// the device (the raw location never reaches the server). Creates a session
+// and returns its public id and its secret token. The token authenticates
+// every later call; only its hash is stored.
 export async function POST(request: NextRequest) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "invalid body" }, { status: 400 });
-  }
+  if (!sameOrigin(request)) return fail(403, "forbidden");
+  const body = await readJson(request);
+  if (!body) return fail(400, "invalid body");
 
-  const { id, lat, lng, utcOffset } = (body ?? {}) as Record<string, unknown>;
-
-  if (typeof id !== "string" || id.length < 8 || id.length > 64) {
-    return Response.json({ error: "invalid id" }, { status: 400 });
-  }
-  if (!isValidLatLng(lat, lng)) {
-    return Response.json({ error: "invalid coordinates" }, { status: 400 });
-  }
+  const { lat, lng, utcOffset } = body;
+  if (!isValidLatLng(lat, lng)) return fail(400, "invalid coordinates");
   if (utcOffset !== undefined && !isValidUtcOffset(utcOffset)) {
-    return Response.json({ error: "invalid utcOffset" }, { status: 400 });
+    return fail(400, "invalid utcOffset");
   }
 
-  const offset = applyPrivacyOffset(lat as number, lng as number);
-  const clock = utcOffset ?? null;
+  // Each network can only add so many people, so nobody fills the map with bots.
+  if (!(await allow(`join:${networkKey(request)}`, JOIN_LIMIT.limit, JOIN_LIMIT.windowMs))) {
+    return fail(429, "too many new sessions", { "Retry-After": "60" });
+  }
 
-  await prisma.presence.upsert({
-    where: { id },
-    create: {
-      id,
-      lat: offset.lat,
-      lng: offset.lng,
-      utcOffset: clock,
-      busy: false,
+  const token = newToken();
+  const presence = await prisma.presence.create({
+    data: {
+      tokenHash: hashToken(token),
+      lat: round(lat as number),
+      lng: round(lng as number),
+      utcOffset: utcOffset ?? null,
       lastSeen: new Date(),
     },
-    update: {
-      lat: offset.lat,
-      lng: offset.lng,
-      utcOffset: clock,
-      lastSeen: new Date(),
-    },
+    select: { id: true },
   });
 
-  return Response.json({ ok: true, lat: offset.lat, lng: offset.lng });
+  const response: JoinResponse = { id: presence.id, token };
+  return ok(response);
 }

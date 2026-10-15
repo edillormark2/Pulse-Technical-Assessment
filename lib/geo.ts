@@ -1,7 +1,8 @@
 // Privacy offset: move a real coordinate 1–3 km in a random direction so the
-// dot is placed *near* the user, never at their exact location. A fresh random
-// offset is generated each session (this runs once per join), so the same user
-// lands somewhere different every time.
+// dot is placed *near* the user, never at their exact location. It runs on the
+// device, once per visit: the raw position never reaches the server, and a
+// rejoin reuses the same spot, so repeated offsets cannot be averaged back to
+// the truth.
 
 const KM_PER_DEG_LAT = 111.32;
 
