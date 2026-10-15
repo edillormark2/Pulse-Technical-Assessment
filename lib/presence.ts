@@ -8,3 +8,7 @@ export const SIGNAL_TTL_MS = 60_000;
 
 // Client poll interval. Kept here so client + server reason about the same cadence.
 export const POLL_INTERVAL_MS = 1_500;
+
+// While asking or connecting, the mailbox carries the accept, the offer/answer
+// and ICE candidates; polling faster then turns a ~5 s handshake into ~1.5 s.
+export const HANDSHAKE_POLL_MS = 400;

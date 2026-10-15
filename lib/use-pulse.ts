@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { join, leave, poll, sendSignal } from "@/lib/api";
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
-import { POLL_INTERVAL_MS } from "@/lib/presence";
+import { HANDSHAKE_POLL_MS, POLL_INTERVAL_MS } from "@/lib/presence";
 import type { PeerDot, PollResponse, PublicSelf, SignalMsg } from "@/lib/types";
 
 export type Conn =
@@ -82,6 +82,8 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Poll right away instead of waiting out the interval (set by the poll loop).
+  const pollNow = useRef<() => void>(() => {});
 
   // Callbacks stored inside a PeerSession outlive the render that created
   // them, so always reach the latest `notify` through a ref.
@@ -224,6 +226,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     setConn({ kind: "requesting", peerId });
     setLivePeer(peers.find((p) => p.id === peerId) ?? null);
     void sendSignal(sessionId, peerId, "request");
+    pollNow.current(); // switch to the handshake cadence now
     requestTimer.current = setTimeout(() => {
       if (
         connRef.current.kind === "requesting" &&
@@ -247,6 +250,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     startPeer(peerId, false);
     void sendSignal(sessionId, peerId, "accept");
     setConn({ kind: "connecting", peerId });
+    pollNow.current(); // their offer is on its way
   }
 
   function acceptIncoming() {
@@ -433,8 +437,18 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     if (phase !== "live" || !sessionId) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // One poll at a time: two in flight could drain the mailbox into two
+    // responses that land out of order. A poll asked for meanwhile runs next.
+    let inFlight = false;
+    let again = false;
 
     const tick = async () => {
+      if (inFlight) {
+        again = true;
+        return;
+      }
+      inFlight = true;
+      if (timer) clearTimeout(timer);
       try {
         const data = await poll(sessionId);
         if (!active) return;
@@ -446,14 +460,23 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
           if (active) setMe(self);
         }
         handlePollRef.current(data);
-      } catch {}
-      if (active) timer = setTimeout(tick, POLL_INTERVAL_MS);
+      } catch {
+      } finally {
+        inFlight = false;
+      }
+      if (!active) return;
+      const kind = connRef.current.kind;
+      const handshake = kind === "requesting" || kind === "connecting";
+      timer = setTimeout(tick, again ? 0 : handshake ? HANDSHAKE_POLL_MS : POLL_INTERVAL_MS);
+      again = false;
     };
+    pollNow.current = () => void tick();
     tick();
 
     return () => {
       active = false;
       if (timer) clearTimeout(timer);
+      pollNow.current = () => {};
     };
   }, [phase, sessionId, myLocation]);
 
