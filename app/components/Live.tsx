@@ -276,6 +276,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           center={layout.center}
           radius={layout.globeRadius}
           minutes={myMinutes}
+          part={pulse.me ? partOfDay(pulse.me, now, myMinutes) : undefined}
           className={clsx("transition-opacity duration-700 ease-[var(--ease-out)]", view && "opacity-0")}
         />
         <Dial

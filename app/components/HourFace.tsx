@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { formatClock, partOfClock } from "@/lib/sun";
+import { formatClock, partOfClock, type PartOfDay } from "@/lib/sun";
 import { DAY_WORDS } from "@/lib/use-world-clock";
 
 /**
@@ -10,11 +10,14 @@ export default function HourFace({
   center,
   radius,
   minutes,
+  part,
   className,
 }: {
   center: { x: number; y: number };
   radius: number;
   minutes: number;
+  /** Your part of the day by your own sun, once your spot is known; by the clock until then. */
+  part?: PartOfDay;
   className?: string;
 }) {
   return (
@@ -30,7 +33,7 @@ export default function HourFace({
         <p className="numeral leading-[0.86] text-opaline-50" style={{ fontSize: Math.round(radius * 0.42) }}>
           {formatClock(minutes)}
         </p>
-        <p className="mt-3 text-[15px] text-opaline-400">your {DAY_WORDS[partOfClock(minutes)]}</p>
+        <p className="mt-3 text-[15px] text-opaline-400">your {DAY_WORDS[part ?? partOfClock(minutes)]}</p>
       </div>
     </div>
   );
