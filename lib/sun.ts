@@ -175,3 +175,68 @@ export function partOfClock(minutes: number): PartOfDay {
   if (hour < 17) return "afternoon";
   return "evening";
 }
+
+/** The sun's altitude at sunrise: its upper edge on the horizon, refraction included. */
+export const SUNRISE_ALTITUDE = -0.833;
+
+/** How far ahead (and how far past) a sunrise counts as daybreak, in minutes. */
+export const DAYBREAK_AHEAD = 30;
+export const DAYBREAK_AFTER = 10;
+
+/**
+ * When the sun next rises at a place, looking up to `withinMinutes` ahead:
+ * the moment its altitude climbs through SUNRISE_ALTITUDE. Null when it does
+ * not rise in that time (it is already up, or it is polar night). Steps a
+ * minute at a time, then bisects to the second.
+ */
+export function nextSunrise(place: LatLng, from: Date, withinMinutes = 120): Date | null {
+  let lo = from.getTime();
+  let below = sunAltitude(place, from) < SUNRISE_ALTITUDE;
+  for (let i = 1; i <= withinMinutes; i++) {
+    const hi = from.getTime() + i * 60_000;
+    const belowNext = sunAltitude(place, new Date(hi)) < SUNRISE_ALTITUDE;
+    if (below && !belowNext) {
+      let a = lo;
+      let b = hi;
+      while (b - a > 1000) {
+        const mid = (a + b) / 2;
+        if (sunAltitude(place, new Date(mid)) < SUNRISE_ALTITUDE) a = mid;
+        else b = mid;
+      }
+      return new Date(Math.round(b / 1000) * 1000);
+    }
+    lo = hi;
+    below = belowNext;
+  }
+  return null;
+}
+
+/** A sunrise close enough to share: when it is, and minutes until it (negative once risen). */
+export interface Daybreak {
+  sunrise: Date;
+  minutes: number;
+}
+
+/** The sun's altitude changes by at most about a quarter of a degree a minute. */
+const MAX_DEGREES_PER_MINUTE = 0.26;
+
+/**
+ * Daybreak at a place: from DAYBREAK_AHEAD minutes before sunrise until
+ * DAYBREAK_AFTER minutes after it. Null the rest of the day.
+ */
+export function daybreak(place: LatLng, now: Date): Daybreak | null {
+  // Most of the day the sun is too far from the horizon to reach it inside
+  // the window, so most dots skip the search.
+  const altitude = sunAltitude(place, now);
+  if (
+    altitude < SUNRISE_ALTITUDE - DAYBREAK_AHEAD * MAX_DEGREES_PER_MINUTE ||
+    altitude > SUNRISE_ALTITUDE + DAYBREAK_AFTER * MAX_DEGREES_PER_MINUTE
+  ) {
+    return null;
+  }
+  const sunrise =
+    nextSunrise(place, now, DAYBREAK_AHEAD) ??
+    nextSunrise(place, new Date(now.getTime() - DAYBREAK_AFTER * 60_000), DAYBREAK_AFTER);
+  if (!sunrise) return null;
+  return { sunrise, minutes: (sunrise.getTime() - now.getTime()) / 60_000 };
+}

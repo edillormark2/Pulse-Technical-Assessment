@@ -3,15 +3,20 @@ import assert from "node:assert/strict";
 import {
   clockHoursApart,
   clockMinutes,
+  DAYBREAK_AFTER,
+  DAYBREAK_AHEAD,
+  daybreak,
   distanceKm,
   formatClock,
   hoursApart,
   isDark,
+  nextSunrise,
   nightRing,
   partOfClock,
   partOfDay,
   solarMinutes,
   subsolarPoint,
+  SUNRISE_ALTITUDE,
   sunAltitude,
 } from "./sun.ts";
 
@@ -122,4 +127,55 @@ test("both ends of a call name the same hour the same way", () => {
   // Just after sunset the sun adds dusk.
   const dusk = new Date("2026-10-16T01:50:00Z"); // 18:50 PDT
   assert.equal(partOfDay(sf, dusk, clockMinutes(-420, dusk)), "dusk");
+});
+
+const minutesBetween = (a: Date, b: Date) => (a.getTime() - b.getTime()) / 60_000;
+
+test("sunrise matches published times within a few minutes", () => {
+  // San Francisco, 15 Oct 2026: published as 07:17–07:18 PDT (14:18 UTC).
+  const sf = nextSunrise(sanFrancisco, new Date("2026-10-15T13:00:00Z"));
+  assert.ok(sf);
+  near(minutesBetween(sf, new Date("2026-10-15T14:17:30Z")), 0, 2);
+  // Manila, 15 Oct 2026: about 05:47 PHT (21:47 UTC the evening before).
+  const mnl = nextSunrise(manila, new Date("2026-10-14T21:00:00Z"));
+  assert.ok(mnl);
+  near(minutesBetween(mnl, new Date("2026-10-14T21:47:00Z")), 0, 2);
+});
+
+test("at the sunrise found, the sun's edge is on the horizon and climbing", () => {
+  const at = nextSunrise(sanFrancisco, new Date("2026-10-15T13:00:00Z"))!;
+  near(sunAltitude(sanFrancisco, at), SUNRISE_ALTITUDE, 0.02);
+  assert.ok(sunAltitude(sanFrancisco, new Date(at.getTime() - 60_000)) < SUNRISE_ALTITUDE);
+});
+
+test("no sunrise while the sun is up, or through polar night", () => {
+  assert.equal(nextSunrise(sanFrancisco, new Date("2026-10-15T20:00:00Z")), null);
+  const longyearbyen = { lat: 78.22, lng: 15.65 };
+  assert.equal(nextSunrise(longyearbyen, new Date("2026-12-20T09:00:00Z"), 24 * 60), null);
+});
+
+test("daybreak runs from half an hour before sunrise to ten minutes after", () => {
+  const sunrise = nextSunrise(sanFrancisco, new Date("2026-10-15T13:00:00Z"))!;
+  const at = (offsetMin: number) => daybreak(sanFrancisco, new Date(sunrise.getTime() + offsetMin * 60_000));
+  near(at(-20)!.minutes, 20, 0.05);
+  near(at(5)!.minutes, -5, 0.05);
+  assert.equal(at(-45), null);
+  assert.equal(at(15), null);
+});
+
+test("skipping the search far from the horizon never misses a daybreak", () => {
+  // Every five minutes for a day, from the equator to past the Arctic Circle,
+  // daybreak must agree with the full search it skips.
+  const places = [manila, sanFrancisco, { lat: 0, lng: 0 }, { lat: -45, lng: 170 }, { lat: 69.65, lng: 18.96 }];
+  for (const day of ["2026-03-20", "2026-06-21", "2026-10-15", "2026-12-21"]) {
+    for (const place of places) {
+      for (let m = 0; m < 24 * 60; m += 5) {
+        const now = new Date(Date.parse(`${day}T00:00:00Z`) + m * 60_000);
+        const full =
+          nextSunrise(place, now, DAYBREAK_AHEAD) ??
+          nextSunrise(place, new Date(now.getTime() - DAYBREAK_AFTER * 60_000), DAYBREAK_AFTER);
+        assert.equal(daybreak(place, now)?.sunrise.getTime(), full?.getTime(), `${day} +${m} min at ${place.lat},${place.lng}`);
+      }
+    }
+  }
 });
