@@ -1,28 +1,111 @@
 @import "tailwindcss";
 
+/*
+ * World Time: a world-time dial at night.
+ * Lacquer blue owns the ground, opaline silver carries ink and the day arc,
+ * and signal red is reserved for the live connection, nothing else.
+ */
+@theme {
+  --color-lacquer-950: #0a1428; /* space around the globe */
+  --color-lacquer-900: #0f1b33; /* the dial's ground */
+  --color-lacquer-850: #142344; /* panels */
+  --color-lacquer-800: #1a2b50; /* raised and hovered surfaces */
+  --color-lacquer-700: #22375f; /* the night arc, quiet strokes */
+  --color-lacquer-600: #2d4672; /* land on the globe */
+
+  --color-opaline-50: #f3f5f8; /* primary ink */
+  --color-opaline-200: #dcdfe4; /* the day arc, secondary ink */
+  --color-opaline-400: #a3aec2; /* muted ink, AA on every surface */
+  --color-opaline-500: #7f8ba3; /* faint ink, AA on ground and panel only */
+
+  --color-signal: #e5483a; /* the live connection: marks, arcs, large numerals */
+  --color-signal-strong: #cf3a2c; /* filled controls carrying white text (AA) */
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo), var(--font-geist), ui-sans-serif, sans-serif;
+
+  /* Emil Kowalski's curves: strong ease-out for UI, ease-in-out for travel. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --radius-panel: 28px;
+  --shadow-float: 0 24px 48px -16px rgb(5 10 22 / 0.7), 0 8px 16px -8px rgb(5 10 22 / 0.5);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-lacquer-900);
+  /* Mobile app-shell baseline (no tap flash, no font inflation, no rubber band). */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-lacquer-900);
+  color: var(--color-opaline-50);
+  font-family: var(--font-sans);
+  caret-color: var(--color-opaline-50);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Browser surfaces carry the design too. */
+::selection {
+  background: var(--color-opaline-200);
+  color: var(--color-lacquer-900);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-lacquer-700) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-opaline-50);
+  outline-offset: 3px;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px; /* below 16px, iOS zooms the page on focus */
+}
+
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Every hour and count is set in tabular figures so digits never jitter. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mapbox attribution is required; set it in the dial's own quiet ink. */
+.mapboxgl-ctrl-attrib.mapboxgl-compact,
+.mapboxgl-ctrl-attrib {
+  background: rgb(15 27 51 / 0.72) !important;
+  color: var(--color-opaline-400);
+}
+.mapboxgl-ctrl-attrib a {
+  color: var(--color-opaline-400) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-property: opacity, color, background-color !important;
+  }
 }
 
 /* Live user dots on the map */
