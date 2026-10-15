@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import clsx from "clsx";
+import { ArrowsInSimple } from "@phosphor-icons/react";
 import Globe, { type GlobeView, type MarkState } from "./Globe";
 import Dial, { type DialLive, type DialPerson } from "./Dial";
 import PersonCard from "./PersonCard";
@@ -96,6 +98,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const [view, setView] = useState<GlobeView | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lng: number; key: string } | null>(null);
+  const [rest, setRest] = useState(0);
 
   const me: PublicSelf = pulse.me ?? { lat: 0, lng: 0, utcOffset: localUtcOffset() };
   const myMinutes = clockMinutes(me.utcOffset, now);
@@ -227,6 +230,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           marks={marks}
           live={livePerson ? { lat: livePerson.peer.lat, lng: livePerson.peer.lng, talking: conn.kind === "connected" } : null}
           focus={focus}
+          rest={rest}
           dialRadius={layout.globeRadius}
           padding={layout.padding}
           onSelect={(id) => select(id)}
@@ -254,6 +258,20 @@ export default function Live({ pulse }: { pulse: Pulse }) {
             </p>
           )}
         </header>
+
+        {view && !dialFits && (
+          <button
+            type="button"
+            className={clsx(
+              "btn btn-quiet card-enter absolute h-10 px-4 text-[14px] shadow-[var(--shadow-float)]",
+              layout.compact ? "right-3 top-[max(20px,env(safe-area-inset-top))]" : "bottom-8 left-8",
+            )}
+            onClick={() => setRest((n) => n + 1)}
+          >
+            <ArrowsInSimple size={18} />
+            Back to the dial
+          </button>
+        )}
       </div>
 
       {videoActive && (

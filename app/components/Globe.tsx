@@ -6,6 +6,7 @@ import type { GeoJSONSource, Map as MapboxMap, Marker } from "mapbox-gl";
 import type { PeerDot, PublicSelf } from "@/lib/types";
 import { nightRing } from "@/lib/sun";
 import { greatCirclePath } from "@/lib/geo";
+import { useViewport } from "@/lib/use-world-clock";
 
 // Public (pk.*) token, inlined at build time. Deliberately no fallback: a
 // missing token must surface the setup hint below, not a silently blank map.
@@ -39,19 +40,56 @@ const ARC_FADE_MS = 500;
 const PRIVACY_KM = 3;
 const EARTH_KM = 6371;
 
-/** Mapbox zoom at which the globe's radius on screen is `px` (equator scale). */
-function zoomForRadius(px: number): number {
-  return Math.log2((px * 2 * Math.PI) / 512);
+/**
+ * Mapbox zoom at which the globe's scale at the centre is `px` per radian.
+ * Mapbox sizes its globe to match Mercator at 45° latitude, hence the √2.
+ */
+function zoomForScale(px: number): number {
+  return Math.log2((px * 2 * Math.PI) / (512 * Math.SQRT2));
 }
 
-/** Pixels per radian at the centre of an orthographic globe = its radius. */
-function measureRadius(map: MapboxMap): number {
+/** Pixels per radian where the globe faces you. */
+function measureScale(map: MapboxMap): number {
   const c = map.getCenter();
   const a = map.project(c);
   const step = c.lat > 80 ? -1 : 1;
   const b = map.project([c.lng, c.lat + step]);
   return Math.hypot(b.x - a.x, b.y - a.y) / (Math.PI / 180);
 }
+
+/**
+ * Radius of the globe's visible disc. The camera has perspective, so the edge
+ * sits well inside the scale at the centre (about 20% on a desktop): walk a
+ * meridian away from the centre and keep the farthest point on screen.
+ */
+function measureEdge(map: MapboxMap): number {
+  const c = map.getCenter();
+  const o = map.project(c);
+  const dir = c.lat > 0 ? -1 : 1;
+  let edge = 0;
+  for (let deg = 45; deg <= 90; deg++) {
+    const p = map.project([c.lng, c.lat + dir * deg]);
+    edge = Math.max(edge, Math.hypot(p.x - o.x, p.y - o.y));
+  }
+  return edge;
+}
+
+/** The zoom at which the globe's visible edge has this radius on screen. */
+function fitZoom(map: MapboxMap, radius: number): number {
+  const zoom = map.getZoom();
+  map.setMinZoom(-2);
+  let fit = zoomForScale(radius);
+  for (let i = 0; i < 4; i++) {
+    map.jumpTo({ zoom: fit });
+    const edge = measureEdge(map);
+    if (!(edge > 0)) break;
+    fit += Math.log2(radius / edge);
+  }
+  map.jumpTo({ zoom });
+  return Math.max(-2, fit);
+}
+
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 /** Restyle Mapbox's dark style into the World Time palette. */
 function paintWorldTime(map: MapboxMap) {
@@ -136,6 +174,7 @@ export default function Globe({
   marks,
   live,
   focus,
+  rest,
   dialRadius,
   padding,
   onSelect,
@@ -149,7 +188,9 @@ export default function Globe({
   live: { lat: number; lng: number; talking: boolean } | null;
   /** Turn the globe to this point (a person picked on the dial). */
   focus: { lat: number; lng: number; key: string } | null;
-  /** Globe radius in px that fits the dial at rest. */
+  /** Bump to zoom back out to the dial. */
+  rest: number;
+  /** Radius in px of the globe's visible disc at rest, inside the dial. */
   dialRadius: number;
   padding: { top: number; right: number; bottom: number; left: number };
   onSelect: (id: string | null) => void;
@@ -159,6 +200,8 @@ export default function Globe({
   const mapRef = useRef<MapboxMap | null>(null);
   const markersRef = useRef<Map<string, Marker>>(new Map());
   const meMarkerRef = useRef<Marker | null>(null);
+  /** Zoom that fits the dial; also the floor, so the globe never shrinks inside it. */
+  const fitRef = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
   const [tokenRejected, setTokenRejected] = useState(false);
 
@@ -186,8 +229,8 @@ export default function Globe({
         style: "mapbox://styles/mapbox/dark-v11",
         projection: "globe",
         center: [start.lng, start.lat],
-        zoom: zoomForRadius(latest.current.dialRadius),
-        minZoom: 0.4,
+        zoom: zoomForScale(latest.current.dialRadius),
+        minZoom: -2,
         dragRotate: false,
         pitchWithRotate: false,
         maxPitch: 0,
@@ -200,12 +243,16 @@ export default function Globe({
       mapRef.current = map;
 
       // Report where the globe is (and size the privacy halo) once per frame.
+      // The disc only changes size with zoom or the canvas, so cache it.
+      let disc = { key: "", radius: 0 };
       const report = () => {
         frame = 0;
         const c = map.project(map.getCenter());
-        const radius = measureRadius(map);
-        latest.current.onView({ x: c.x, y: c.y, radius });
-        const haloPx = Math.max(56, ((2 * PRIVACY_KM) / EARTH_KM) * radius);
+        const canvas = map.getCanvas();
+        const key = `${map.getZoom()}:${canvas.clientWidth}x${canvas.clientHeight}`;
+        if (disc.key !== key) disc = { key, radius: measureEdge(map) };
+        latest.current.onView({ x: c.x, y: c.y, radius: disc.radius });
+        const haloPx = Math.max(56, ((2 * PRIVACY_KM) / EARTH_KM) * measureScale(map));
         meMarkerRef.current?.getElement().style.setProperty("--halo", `${haloPx}px`);
       };
       const schedule = () => {
@@ -213,6 +260,11 @@ export default function Globe({
       };
 
       map.on("style.load", () => {
+        // The globe projection is live from here: fit it inside the dial
+        // before its first full frame, so it never visibly jumps.
+        fitRef.current = fitZoom(map, latest.current.dialRadius);
+        map.jumpTo({ zoom: fitRef.current });
+        map.setMinZoom(fitRef.current);
         paintWorldTime(map);
         const firstLabel = map.getStyle()?.layers?.find((l) => l.type === "symbol")?.id;
         map.addSource("night", { type: "geojson", data: nightData(new Date()) });
@@ -244,10 +296,6 @@ export default function Globe({
       });
       map.on("load", () => {
         if (cancelled) return;
-        // Fit the globe inside the dial: one measured correction makes it exact.
-        const target = latest.current.dialRadius;
-        const measured = measureRadius(map);
-        if (measured > 0) map.jumpTo({ zoom: map.getZoom() + Math.log2(target / measured) });
         setReady(true);
         report();
       });
@@ -275,13 +323,34 @@ export default function Globe({
     };
   }, []);
 
-  // Keep the dial's reserved space (panel, sheet) out of the globe's centre.
+  // Keep the globe inside the dial and the panel's space out of its centre as
+  // the viewport changes. One camera move for both, so neither cuts the other
+  // short. At rest it follows the new fit; zoomed in, it stays where you are.
   const { top, right, bottom, left } = padding;
+  const { width, height } = useViewport();
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    map.easeTo({ padding: { top, right, bottom, left }, duration: 240 });
-  }, [ready, top, right, bottom, left]);
+    map.resize();
+    const zoom = map.getZoom();
+    const atRest = fitRef.current === null || zoom <= fitRef.current + 0.02;
+    const fit = fitZoom(map, dialRadius);
+    fitRef.current = fit;
+    map.setMinZoom(fit);
+    map.easeTo({
+      padding: { top, right, bottom, left },
+      zoom: atRest ? fit : Math.max(zoom, fit),
+      duration: 240,
+    });
+  }, [ready, dialRadius, top, right, bottom, left, width, height]);
+
+  // Back to the dial from wherever you wandered.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !rest || fitRef.current === null) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    map.easeTo({ zoom: fitRef.current, duration: reduce ? 0 : 800, easing: easeInOutCubic });
+  }, [ready, rest]);
 
   // You: the privacy-offset spot everyone else sees, with its 1–3 km halo.
   useEffect(() => {
@@ -380,11 +449,7 @@ export default function Globe({
     const map = mapRef.current;
     if (!map || !ready || focusLat === undefined || focusLng === undefined) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    map.easeTo({
-      center: [focusLng, focusLat],
-      duration: reduce ? 0 : 900,
-      easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
-    });
+    map.easeTo({ center: [focusLng, focusLat], duration: reduce ? 0 : 900, easing: easeInOutCubic });
   }, [ready, focusKey, focusLat, focusLng]);
 
   return (
