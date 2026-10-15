@@ -35,6 +35,7 @@ const INK = {
   signal: "#e5483a",
 };
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+const ARC_FADE_MS = 500;
 const PRIVACY_KM = 3;
 const EARTH_KM = 6371;
 
@@ -230,7 +231,12 @@ export default function Globe({
           type: "line",
           source: "call-arc",
           layout: { "line-cap": "round", "line-join": "round" },
-          paint: { "line-color": INK.signal, "line-width": 2.25, "line-opacity": 0.95 },
+          paint: {
+            "line-color": INK.signal,
+            "line-width": 2.25,
+            "line-opacity": 0.95,
+            "line-opacity-transition": { duration: ARC_FADE_MS, delay: 0 },
+          },
         });
         nightTimer = setInterval(() => {
           (map.getSource("night") as GeoJSONSource | undefined)?.setData(nightData(new Date()));
@@ -347,9 +353,14 @@ export default function Globe({
     const source = map?.getSource("call-arc") as GeoJSONSource | undefined;
     if (!map || !ready || !source) return;
     if (liveLat === undefined || liveLng === undefined || !me) {
-      source.setData(EMPTY);
-      return;
+      // Fade the line out, then drop it (unless a new call drew one meanwhile).
+      map.setPaintProperty("call-arc", "line-opacity", 0);
+      const t = setTimeout(() => {
+        if (map.getPaintProperty("call-arc", "line-opacity") === 0) source.setData(EMPTY);
+      }, ARC_FADE_MS);
+      return () => clearTimeout(t);
     }
+    map.setPaintProperty("call-arc", "line-opacity", 0.95);
     source.setData({
       type: "Feature",
       properties: {},
@@ -377,7 +388,8 @@ export default function Globe({
   }, [ready, focusKey, focusLat, focusLng]);
 
   return (
-    <div className="absolute inset-0 bg-lacquer-950">
+    // `isolate` keeps Mapbox's controls (z-index 2) beneath the panels above.
+    <div className="absolute inset-0 isolate bg-lacquer-950">
       <div ref={containerRef} className="h-full w-full" />
       {(!TOKEN || tokenRejected) && (
         <div className="absolute inset-0 grid place-items-center p-6 text-center">

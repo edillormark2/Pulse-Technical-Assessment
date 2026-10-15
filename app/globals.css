@@ -168,6 +168,97 @@ a,
 .icon-button:active {
   transform: scale(0.94);
 }
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.icon-button--end {
+  color: var(--color-signal);
+}
+
+/* Video controls: large round targets on the stage. */
+.round-control {
+  display: inline-grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(26 43 80 / 0.92);
+  color: var(--color-opaline-50);
+  transition:
+    transform 140ms var(--ease-out),
+    background-color 160ms ease;
+}
+.round-control:active {
+  transform: scale(0.94);
+}
+.round-control--off {
+  background: var(--color-opaline-50);
+  color: var(--color-lacquer-900);
+}
+.round-control--end {
+  background: var(--color-signal-strong);
+  color: #fff;
+}
+
+/* Steps of a wait: done, happening now, still to come (the state grammar). */
+.stage-mark {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 999px;
+}
+.stage-mark--done {
+  background: var(--color-opaline-50);
+}
+.stage-mark--current {
+  background: var(--color-signal);
+  animation: dot-ring 1.4s var(--ease-out) infinite;
+}
+.stage-mark--pending {
+  box-shadow: inset 0 0 0 2px var(--color-lacquer-700);
+}
+
+/* Messages. Yours in opaline, theirs in lacquer; new ones rise in. */
+.bubble {
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+@starting-style {
+  .bubble {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.bubble--mine {
+  background: var(--color-opaline-50);
+  color: var(--color-lacquer-900);
+  border-bottom-right-radius: 6px;
+}
+.bubble--theirs {
+  background: var(--color-lacquer-800);
+  color: var(--color-opaline-50);
+  border-bottom-left-radius: 6px;
+}
+/* Goodbye: the conversation dissolves, newest last. */
+.bubble--dissolve {
+  animation: dissolve 700ms var(--ease-out) forwards;
+}
+@keyframes dissolve {
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(-6px) scale(0.98);
+  }
+}
 @media (hover: hover) and (pointer: fine) {
   .btn-primary:hover {
     background: #fff;
@@ -178,9 +269,22 @@ a,
   .btn-signal:hover {
     background: #b9301f;
   }
-  .icon-button:hover {
+  .icon-button:not(:disabled):hover {
     background: var(--color-lacquer-800);
     color: var(--color-opaline-50);
+  }
+  .icon-button--end:not(:disabled):hover {
+    background: rgb(229 72 58 / 0.14);
+    color: var(--color-signal);
+  }
+  .round-control:hover {
+    background: var(--color-lacquer-700);
+  }
+  .round-control--off:hover {
+    background: #fff;
+  }
+  .round-control--end:hover {
+    background: #b9301f;
   }
 }
 
@@ -209,6 +313,14 @@ a,
  * free = filled opaline, busy = hollow ring, selected = grown,
  * calling / talking = signal red, ringing = red and pulsing (someone is asking you).
  */
+/* Mapbox's logo and attribution ride above the phone sheet (Live sets
+   --sheet-h), so they stay on the visible map. */
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right {
+  bottom: var(--sheet-h, 0px);
+  transition: bottom 240ms var(--ease-out);
+}
+
 .globe-dot {
   width: 32px; /* generous touch target around a small mark */
   height: 32px;
@@ -371,13 +483,34 @@ a,
     stroke-dashoffset: 0;
   }
 }
+.dial-arc--retract {
+  stroke-dasharray: 1;
+  animation: dial-retract 600ms var(--ease-in-out) forwards;
+}
+@keyframes dial-retract {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .dial-sweep,
   .dial-countdown {
     display: none; /* a frozen sweep would misreport the time left */
   }
   .dial-arc--solid {
+    animation: none;
     stroke-dashoffset: 0;
+  }
+  .dial-arc--retract {
+    animation: fade-out 300ms ease forwards;
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
   }
 }
 

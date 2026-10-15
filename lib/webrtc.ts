@@ -194,6 +194,16 @@ export class PeerSession {
     return this.videoStart;
   }
 
+  /** Mute or unmute your microphone without renegotiating. */
+  setMicEnabled(on: boolean) {
+    for (const track of this.localStream?.getAudioTracks() ?? []) track.enabled = on;
+  }
+
+  /** Turn your camera picture off (they see black) or back on. */
+  setCameraEnabled(on: boolean) {
+    for (const track of this.localStream?.getVideoTracks() ?? []) track.enabled = on;
+  }
+
   stopVideo() {
     this.videoStart = null;
     if (this.localStream) {

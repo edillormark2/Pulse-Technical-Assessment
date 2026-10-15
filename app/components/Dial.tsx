@@ -29,13 +29,13 @@ function polar(c: number, r: number, deg: number): [number, number] {
   return [c + r * Math.cos(deg * DEG), c + r * Math.sin(deg * DEG)];
 }
 
-/** Clockwise SVG arc from a0 to a1 (degrees) at radius r. */
-function arc(c: number, r: number, a0: number, a1: number): string {
-  let sweep = (a1 - a0) % 360;
+/** SVG arc from a0 to a1 (degrees) at radius r, clockwise unless `ccw`. */
+function arc(c: number, r: number, a0: number, a1: number, ccw = false): string {
+  let sweep = (ccw ? a0 - a1 : a1 - a0) % 360;
   if (sweep < 0) sweep += 360;
   const [x0, y0] = polar(c, r, a0);
-  const [x1, y1] = polar(c, r, a0 + sweep);
-  return `M${x0} ${y0}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${x1} ${y1}`;
+  const [x1, y1] = polar(c, r, ccw ? a0 - sweep : a0 + sweep);
+  return `M${x0} ${y0}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} ${ccw ? 0 : 1} ${x1} ${y1}`;
 }
 
 /**
@@ -106,7 +106,26 @@ export default function Dial({
     return () => clearTimeout(t);
   }, []);
 
+  // The call arc always starts at your hour and runs the short way to theirs:
+  // clockwise to people ahead of you, anticlockwise to people behind.
   const liveMark = live ? placed.find((p) => p.person.id === live.id) : undefined;
+  const callArc =
+    live && liveMark && live.phase !== "calling"
+      ? { d: arc(c, r2 + 4, -90, liveMark.angle, liveMark.angle < -90), talking: live.phase === "talking" }
+      : null;
+
+  // On goodbye the arc pulls back into your hour instead of vanishing.
+  const [shownArc, setShownArc] = useState(callArc);
+  const [retracting, setRetracting] = useState<string | null>(null);
+  if (callArc?.d !== shownArc?.d || callArc?.talking !== shownArc?.talking) {
+    if (!callArc && shownArc?.talking) setRetracting(shownArc.d);
+    setShownArc(callArc);
+  }
+  useEffect(() => {
+    if (!retracting) return;
+    const t = setTimeout(() => setRetracting(null), 700);
+    return () => clearTimeout(t);
+  }, [retracting]);
 
   if (!center) return null;
   return (
@@ -173,17 +192,16 @@ export default function Dial({
         )}
 
         {/* The call arc: from your hour to theirs, dotted until you are talking. */}
-        {liveMark && live?.phase !== "calling" && (
+        {callArc && (
           <path
-            key={`arc-${live!.id}-${live!.phase === "talking"}`}
-            d={
-              liveMark.angle >= -90 && liveMark.angle <= 90
-                ? arc(c, r2 + 4, -90, liveMark.angle)
-                : arc(c, r2 + 4, liveMark.angle, -90)
-            }
+            key={`arc-${live!.id}-${callArc.talking}`}
+            d={callArc.d}
             pathLength={1}
-            className={clsx("dial-arc", live!.phase === "talking" ? "dial-arc--solid" : "dial-arc--dotted")}
+            className={clsx("dial-arc", callArc.talking ? "dial-arc--solid" : "dial-arc--dotted")}
           />
+        )}
+        {!callArc && retracting && (
+          <path key={`retract-${retracting}`} d={retracting} pathLength={1} className="dial-arc dial-arc--retract" />
         )}
       </svg>
 

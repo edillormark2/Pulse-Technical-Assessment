@@ -24,6 +24,9 @@ export interface ChatMessage {
   text: string;
 }
 
+/** How long a finished conversation stays on screen while it dissolves. */
+const ENDING_MS = 1400;
+
 const REQUEST_TIMEOUT_MS = 30_000;
 // After an accept, how long the data channel may take to open before we give up.
 const CONNECT_TIMEOUT_MS = 20_000;
@@ -44,12 +47,24 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   );
   // Public position: the privacy-offset spot everyone else sees.
   const [me, setMe] = useState<PublicSelf | null>(null);
+  // The other end of the current connection, kept even if they drop off the
+  // presence list mid-call (a throttled tab can miss heartbeats).
+  const [livePeer, setLivePeer] = useState<PeerDot | null>(null);
+  // WebRTC link state, so a handshake shows real stages instead of a spinner.
+  const [link, setLink] = useState<RTCPeerConnectionState | null>(null);
+  // A conversation that just ended, kept briefly so it can dissolve on screen.
+  const [ending, setEnding] = useState<{ messages: ChatMessage[] } | null>(null);
+  const [micOn, setMicOn] = useState(true);
+  const [cameraOn, setCameraOn] = useState(true);
+  // Whether you asked (true) or answered (false) the current connection.
+  const [caller, setCaller] = useState<boolean | null>(null);
 
   const [conn, _setConn] = useState<Conn>({ kind: "idle" });
   const connRef = useRef<Conn>(conn);
   const setConn = (c: Conn) => {
     connRef.current = c;
     _setConn(c);
+    if (c.kind === "idle") setLivePeer(null);
   };
 
   const [video, _setVideo] = useState<VideoState>("none");
@@ -61,8 +76,10 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
 
   const peerRef = useRef<PeerSession | null>(null);
   const msgId = useRef(0);
+  const messagesRef = useRef<ChatMessage[]>([]);
   const requestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const endingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Callbacks stored inside a PeerSession outlive the render that created
   // them, so always reach the latest `notify` through a ref.
@@ -72,7 +89,19 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   });
 
   function addMessage(mine: boolean, text: string) {
-    setMessages((prev) => [...prev, { id: msgId.current++, mine, text }]);
+    messagesRef.current = [
+      ...messagesRef.current,
+      { id: msgId.current++, mine, text },
+    ];
+    setMessages(messagesRef.current);
+  }
+
+  function resetMedia() {
+    setLocalStream(null);
+    setRemoteStream(null);
+    setVideo("none");
+    setMicOn(true);
+    setCameraOn(true);
   }
 
   function teardown(message?: string) {
@@ -80,10 +109,19 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     if (connectTimer.current) clearTimeout(connectTimer.current);
     peerRef.current?.close();
     peerRef.current = null;
-    setLocalStream(null);
-    setRemoteStream(null);
-    setVideo("none");
+    resetMedia();
+    setLink(null);
+    setCaller(null);
+    // Nothing is kept: the conversation is cleared now, and only shown for a
+    // moment longer while it dissolves on screen.
+    const finished = messagesRef.current;
+    messagesRef.current = [];
     setMessages([]);
+    if (finished.length > 0) {
+      if (endingTimer.current) clearTimeout(endingTimer.current);
+      setEnding({ messages: finished });
+      endingTimer.current = setTimeout(() => setEnding(null), ENDING_MS);
+    }
     setConn({ kind: "idle" });
     if (message) notifyRef.current(message);
   }
@@ -114,14 +152,15 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
       onRemoteStream: (stream) => setRemoteStream(stream),
       onConnectionState: (state) => {
         iceState = state;
+        if (peerRef.current === ps) setLink(state);
         if (state === "failed") {
-          dropConnection(ps, peerId, "Connection failed (network).");
+          dropConnection(ps, peerId, "The connection dropped. Nothing was kept.");
         } else if (state === "disconnected") {
           // Usually the other side vanished without a goodbye (crashed, lost
           // network). It can also be a blip, so give it a moment to recover.
           setTimeout(() => {
             if (iceState === "disconnected") {
-              dropConnection(ps, peerId, "Stranger disconnected.");
+              dropConnection(ps, peerId, "They left. Nothing was kept.");
             }
           }, DISCONNECT_GRACE_MS);
         }
@@ -130,12 +169,14 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         if (connectTimer.current) clearTimeout(connectTimer.current);
         setConn({ kind: "connected", peerId });
       },
-      onChannelClose: () => dropConnection(ps, peerId, "Stranger disconnected."),
+      onChannelClose: () => dropConnection(ps, peerId, "They left. Nothing was kept."),
     });
     peerRef.current = ps;
+    setLink("new");
+    setCaller(initiator);
     connectTimer.current = setTimeout(() => {
       if (connRef.current.kind === "connecting") {
-        dropConnection(ps, peerId, "Couldn't connect. Try again.");
+        dropConnection(ps, peerId, "Couldn't open a direct line. Try again.");
       }
     }, CONNECT_TIMEOUT_MS);
   }
@@ -159,21 +200,19 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
             .catch(() => {
               setVideo("none");
               ps.sendControl("video-end");
-              notifyRef.current("Camera unavailable.");
+              notifyRef.current("Your camera isn't available.");
             });
         }
         break;
       case "video-decline":
         if (videoRef.current === "requesting") {
           setVideo("none");
-          notifyRef.current("Video declined.");
+          notifyRef.current("They'd rather keep it to text.");
         }
         break;
       case "video-end":
         ps?.stopVideo();
-        setLocalStream(null);
-        setRemoteStream(null);
-        setVideo("none");
+        resetMedia();
         break;
     }
   }
@@ -181,6 +220,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   function requestConnection(peerId: string) {
     if (connRef.current.kind !== "idle") return;
     setConn({ kind: "requesting", peerId });
+    setLivePeer(peers.find((p) => p.id === peerId) ?? null);
     void sendSignal(sessionId, peerId, "request");
     requestTimer.current = setTimeout(() => {
       if (
@@ -188,7 +228,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         connRef.current.peerId === peerId
       ) {
         void sendSignal(sessionId, peerId, "end");
-        teardown("No answer.");
+        teardown("No answer this time.");
       }
     }, REQUEST_TIMEOUT_MS);
   }
@@ -249,7 +289,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
       .catch(() => {
         ps.sendControl("video-decline");
         setVideo("none");
-        notifyRef.current("Camera unavailable.");
+        notifyRef.current("Your camera isn't available.");
       });
   }
 
@@ -262,9 +302,26 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     const ps = peerRef.current;
     ps?.stopVideo();
     ps?.sendControl("video-end");
-    setLocalStream(null);
-    setRemoteStream(null);
+    resetMedia();
+  }
+
+  /** Withdraw a video request that hasn't been answered yet. */
+  function cancelVideoRequest() {
+    if (videoRef.current !== "requesting") return;
+    peerRef.current?.sendControl("video-end");
     setVideo("none");
+  }
+
+  function toggleMic() {
+    const next = !micOn;
+    peerRef.current?.setMicEnabled(next);
+    setMicOn(next);
+  }
+
+  function toggleCamera() {
+    const next = !cameraOn;
+    peerRef.current?.setCameraEnabled(next);
+    setCameraOn(next);
   }
 
   function processSignal(sig: SignalMsg) {
@@ -303,7 +360,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         const c = connRef.current;
         if (c.kind === "requesting" && c.peerId === sig.fromId) {
           if (requestTimer.current) clearTimeout(requestTimer.current);
-          teardown("Request declined.");
+          teardown("They said not now.");
         }
         break;
       }
@@ -330,7 +387,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
           c.peerId === sig.fromId
         ) {
           if (c.kind === "incoming") setConn({ kind: "idle" });
-          else teardown("Stranger disconnected.");
+          else teardown("They left. Nothing was kept.");
         }
         break;
       }
@@ -340,6 +397,13 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   function handlePoll(data: PollResponse) {
     setPeers(data.peers);
     for (const s of data.signals) processSignal(s);
+
+    // Keep the latest known position and clock of whoever we're connected to.
+    const current = connRef.current;
+    if (current.kind !== "idle") {
+      const other = data.peers.find((p) => p.id === current.peerId);
+      if (other) setLivePeer(other);
+    }
 
     // A request or handshake whose other side has left the map can never
     // complete, so stop waiting instead of hanging until a timeout. (A live
@@ -351,9 +415,9 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     if (c.kind === "incoming") {
       setConn({ kind: "idle" });
     } else if (c.kind === "requesting") {
-      teardown("They left.");
+      teardown("They left before answering.");
     } else if (peerRef.current) {
-      dropConnection(peerRef.current, c.peerId, "Stranger disconnected.");
+      dropConnection(peerRef.current, c.peerId, "They left. Nothing was kept.");
     }
   }
 
@@ -416,11 +480,20 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     peers,
     me,
     conn,
+    livePeer,
+    link,
+    caller,
     video,
     messages,
+    ending,
     localStream,
     remoteStream,
+    micOn,
+    cameraOn,
     enter,
+    cancelVideoRequest,
+    toggleMic,
+    toggleCamera,
     requestConnection,
     cancelRequest,
     acceptIncoming,

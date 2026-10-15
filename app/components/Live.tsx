@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Globe, { type GlobeView, type MarkState } from "./Globe";
 import Dial, { type DialLive, type DialPerson } from "./Dial";
 import PersonCard from "./PersonCard";
 import IdleNote from "./IdleNote";
-import ConnectionPrompt from "./ConnectionPrompt";
-import ChatPanel from "./ChatPanel";
-import VideoPanel from "./VideoPanel";
+import CallCard from "./CallCard";
+import IncomingCard from "./IncomingCard";
+import ChatCard from "./ChatCard";
+import EndingCard from "./EndingCard";
+import VideoStage from "./VideoStage";
 import type { usePulse } from "@/lib/use-pulse";
 import type { PeerDot, PublicSelf } from "@/lib/types";
 import { localUtcOffset } from "@/lib/api";
@@ -32,6 +34,14 @@ export interface PersonView {
   dayWord: string;
   km: number;
 }
+
+/** How the dial describes the person you are in a conversation with. */
+const LIVE_LABEL: Record<DialLive["phase"], string> = {
+  calling: ", waiting for their yes",
+  ringing: ", asking to talk with you",
+  connecting: ", connecting to you",
+  talking: ", talking with you",
+};
 
 function describe(peer: PeerDot, me: PublicSelf, now: Date): PersonView {
   const apart =
@@ -80,7 +90,7 @@ function useDialLayout() {
 }
 
 export default function Live({ pulse }: { pulse: Pulse }) {
-  const { conn, video, peers } = pulse;
+  const { conn, peers } = pulse;
   const now = useNow();
   const layout = useDialLayout();
   const [view, setView] = useState<GlobeView | null>(null);
@@ -117,7 +127,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     deltaMinutes: Math.round(v.hoursApart * 60),
     state: stateOf(v.peer),
     label: `Stranger, ${formatClock(v.minutes)} their ${v.dayWord}, ${formatDistance(v.km)} away${
-      v.peer.busy ? ", in another conversation" : ""
+      v.peer.id === liveId && livePhase ? LIVE_LABEL[livePhase] : v.peer.busy ? ", in another conversation" : ""
     }`,
   }));
 
@@ -139,102 +149,148 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     setSelectedId(null);
   }
 
-  const inChat = conn.kind === "connecting" || conn.kind === "connected";
+  // A request should be noticeable even from another tab.
+  const ringing = conn.kind === "incoming";
+  useEffect(() => {
+    if (!ringing) return;
+    const previous = document.title;
+    document.title = "● Someone wants to talk · Pulse";
+    return () => {
+      document.title = previous;
+    };
+  }, [ringing]);
+
+  // Mapbox's logo and attribution ride just above the phone sheet, so the
+  // map always carries them while it is visible.
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const sheetRef = useCallback((el: HTMLDivElement) => {
+    const observer = new ResizeObserver(() => setSheetHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      setSheetHeight(0);
+    };
+  }, []);
+
+  const [chatOverVideo, setChatOverVideo] = useState(false);
+  const inChat = conn.kind === "connected";
+  const videoActive = pulse.video === "active";
+  const livePersonView = pulse.livePeer ? describe(pulse.livePeer, me, now) : livePerson;
+
+  // Exactly one card at a time, chosen by the state of the conversation.
+  let card: React.ReactNode = null;
+  if (pulse.ending) {
+    card = <EndingCard messages={pulse.ending.messages} className="max-h-[min(640px,calc(100dvh-48px))]" />;
+  } else if (conn.kind === "incoming") {
+    card = <IncomingCard person={livePersonView} onAccept={pulse.acceptIncoming} onDecline={pulse.declineIncoming} />;
+  } else if (conn.kind === "requesting" || conn.kind === "connecting") {
+    card = (
+      <CallCard
+        person={livePersonView}
+        phase={conn.kind === "requesting" ? "calling" : "connecting"}
+        caller={conn.kind === "requesting" || pulse.caller === true}
+        link={pulse.link}
+        onCancel={conn.kind === "requesting" ? pulse.cancelRequest : () => pulse.endConnection()}
+      />
+    );
+  } else if (inChat) {
+    card = (
+      <ChatCard
+        person={livePersonView}
+        messages={pulse.messages}
+        video={pulse.video}
+        onSend={pulse.sendChat}
+        onAskVideo={pulse.startVideoRequest}
+        onCancelVideo={pulse.cancelVideoRequest}
+        onAcceptVideo={pulse.acceptVideo}
+        onDeclineVideo={pulse.declineVideo}
+        onEnd={() => pulse.endConnection()}
+        className={layout.compact ? "h-[min(560px,62dvh)]" : "h-[min(640px,calc(100dvh-48px))]"}
+      />
+    );
+  } else if (selected) {
+    card = <PersonCard person={selected} myMinutes={myMinutes} onAsk={ask} onClose={() => setSelectedId(null)} />;
+  } else if (!layout.compact) {
+    card = <IdleNote others={peers.length} />;
+  }
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-lacquer-950">
-      <Globe
-        peers={peers}
-        me={pulse.me}
-        marks={marks}
-        live={livePerson ? { lat: livePerson.peer.lat, lng: livePerson.peer.lng, talking: conn.kind === "connected" } : null}
-        focus={focus}
-        dialRadius={layout.globeRadius}
-        padding={layout.padding}
-        onSelect={(id) => select(id)}
-        onView={setView}
-      />
-      <Dial
-        center={view}
-        globeRadius={layout.globeRadius}
-        visible={dialFits}
-        myMinutes={myMinutes}
-        people={dialPeople}
-        live={liveId && livePhase ? { id: liveId, phase: livePhase } : null}
-        compact={layout.compact}
-        onSelect={(id) => select(id, true)}
-      />
+    <main
+      className="fixed inset-0 overflow-hidden bg-lacquer-950"
+      style={{ "--sheet-h": `${sheetHeight}px` } as React.CSSProperties}
+    >
+      {/* The world, out of reach while a video covers it. */}
+      <div className="absolute inset-0" inert={videoActive}>
+        <Globe
+          peers={peers}
+          me={pulse.me}
+          marks={marks}
+          live={livePerson ? { lat: livePerson.peer.lat, lng: livePerson.peer.lng, talking: conn.kind === "connected" } : null}
+          focus={focus}
+          dialRadius={layout.globeRadius}
+          padding={layout.padding}
+          onSelect={(id) => select(id)}
+          onView={setView}
+        />
+        <Dial
+          center={view}
+          globeRadius={layout.globeRadius}
+          visible={dialFits}
+          myMinutes={myMinutes}
+          people={dialPeople}
+          live={liveId && livePhase ? { id: liveId, phase: livePhase } : null}
+          compact={layout.compact}
+          onSelect={(id) => select(id, true)}
+        />
 
-      <header className="pointer-events-none absolute left-0 top-0 p-5 sm:p-8">
-        <h1 className="numeral text-[34px] leading-none sm:text-[44px]">Pulse</h1>
-        <p className="tabular mt-2 text-[15px] text-opaline-200">
-          {formatClock(myMinutes)} here · {peers.length} {peers.length === 1 ? "person" : "people"} awake
-        </p>
-        {peers.length > 0 && (
-          <p className="tabular mt-1 text-[13px] text-opaline-400">
-            {awakeInDark === 0 ? "Nobody else is in the dark right now" : `${awakeInDark} of them in the dark`}
+        <header className="pointer-events-none absolute left-0 top-0 p-5 sm:p-8">
+          <h1 className="numeral text-[34px] leading-none sm:text-[44px]">Pulse</h1>
+          <p className="tabular mt-2 text-[15px] text-opaline-200">
+            {formatClock(myMinutes)} here · {peers.length} {peers.length === 1 ? "person" : "people"} awake
           </p>
-        )}
-      </header>
-
-      {!layout.compact && (
-        <aside
-          className="absolute inset-y-0 right-0 flex items-center px-8"
-          style={{ width: layout.column }}
-          aria-label="Selected person"
-        >
-          {selected && conn.kind === "idle" ? (
-            <PersonCard person={selected} myMinutes={myMinutes} onAsk={ask} onClose={() => setSelectedId(null)} />
-          ) : (
-            conn.kind === "idle" && <IdleNote others={peers.length} />
+          {peers.length > 0 && (
+            <p className="tabular mt-1 text-[13px] text-opaline-400">
+              {awakeInDark === 0 ? "Nobody else is in the dark right now" : `${awakeInDark} of them in the dark`}
+            </p>
           )}
-        </aside>
-      )}
-      {layout.compact && selected && conn.kind === "idle" && (
-        <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-          <PersonCard person={selected} myMinutes={myMinutes} onAsk={ask} onClose={() => setSelectedId(null)} />
-        </div>
+        </header>
+      </div>
+
+      {videoActive && (
+        <VideoStage
+          person={livePersonView}
+          localStream={pulse.localStream}
+          remoteStream={pulse.remoteStream}
+          micOn={pulse.micOn}
+          cameraOn={pulse.cameraOn}
+          onToggleMic={pulse.toggleMic}
+          onToggleCamera={pulse.toggleCamera}
+          onEnd={pulse.endVideo}
+          onShowChat={layout.compact ? () => setChatOverVideo(true) : undefined}
+          style={{ right: layout.compact ? 0 : layout.column }}
+        />
       )}
 
-      {conn.kind === "requesting" && (
-        <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-lacquer-850 px-4 py-2 text-sm text-opaline-50">
-          <span>Asking…</span>
-          <button onClick={pulse.cancelRequest} className="rounded-full bg-lacquer-700 px-3 py-1 text-xs">
-            Cancel
-          </button>
-        </div>
-      )}
-      {conn.kind === "incoming" && (
-        <ConnectionPrompt
-          title="A stranger wants to connect"
-          acceptLabel="Accept"
-          declineLabel="Decline"
-          onAccept={pulse.acceptIncoming}
-          onDecline={pulse.declineIncoming}
-        />
-      )}
-      {inChat && (
-        <ChatPanel
-          messages={pulse.messages}
-          connected={conn.kind === "connected"}
-          videoBusy={video !== "none"}
-          onSend={pulse.sendChat}
-          onStartVideo={pulse.startVideoRequest}
-          onEnd={() => pulse.endConnection()}
-        />
-      )}
-      {video === "incoming" && (
-        <ConnectionPrompt
-          title="Start video call?"
-          subtitle="The stranger wants to turn on video."
-          acceptLabel="Accept"
-          declineLabel="Decline"
-          onAccept={pulse.acceptVideo}
-          onDecline={pulse.declineVideo}
-        />
-      )}
-      {video === "active" && (
-        <VideoPanel localStream={pulse.localStream} remoteStream={pulse.remoteStream} onEnd={pulse.endVideo} />
+      {layout.compact ? (
+        (!videoActive || chatOverVideo) &&
+        card && (
+          <div ref={sheetRef} className="absolute inset-x-0 bottom-0 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+            {videoActive && (
+              <button type="button" className="btn btn-quiet mb-2 h-10 w-full text-[14px]" onClick={() => setChatOverVideo(false)}>
+                Back to video
+              </button>
+            )}
+            {card}
+          </div>
+        )
+      ) : (
+        <aside
+          className="absolute inset-y-0 right-0 flex items-center px-6"
+          style={{ width: layout.column }}
+          aria-label="Conversation"
+        >
+          {card}
+        </aside>
       )}
     </main>
   );
