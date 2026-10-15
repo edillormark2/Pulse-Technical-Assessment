@@ -90,8 +90,9 @@ export default function ChatCard({
         </div>
       </header>
 
+      {/* Video requests are a strip of the panel between hairlines, not a card in a card. */}
       {video === "requesting" && (
-        <div className="mx-4 mb-2 flex items-center justify-between gap-3 rounded-2xl bg-lacquer-800 px-4 py-3" role="status">
+        <div className="flex items-center justify-between gap-3 border-y border-lacquer-700 px-6 py-3" role="status">
           <p className="text-[14px] text-opaline-200">Asking to turn on video…</p>
           <button type="button" className="text-[14px] font-medium text-opaline-50 underline underline-offset-4" onClick={onCancelVideo}>
             Cancel
@@ -99,10 +100,10 @@ export default function ChatCard({
         </div>
       )}
       {video === "incoming" && (
-        <div className="mx-4 mb-2 rounded-2xl bg-lacquer-800 px-4 py-3" role="alert">
+        <div className="border-y border-lacquer-700 px-6 py-3" role="alert">
           <p className="text-[14px] text-opaline-50">They&rsquo;d like to turn on video.</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" className="btn btn-quiet h-10 bg-lacquer-700 text-[14px]" onClick={onDeclineVideo}>
+            <button type="button" className="btn btn-quiet h-10 text-[14px]" onClick={onDeclineVideo}>
               Not now
             </button>
             <button type="button" className="btn btn-primary h-10 text-[14px]" onClick={onAcceptVideo}>
@@ -146,7 +147,7 @@ export default function ChatCard({
           className="h-12 min-w-0 flex-1 rounded-full bg-lacquer-800 px-5 text-opaline-50 placeholder:text-opaline-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-opaline-50"
         />
         <button type="submit" className="btn btn-primary btn-send size-12 shrink-0 p-0" aria-label="Send" disabled={!draft.trim()}>
-          <PaperPlaneRight size={20} weight="fill" />
+          <PaperPlaneRight size={20} />
         </button>
       </form>
     </section>

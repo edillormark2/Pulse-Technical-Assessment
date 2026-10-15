@@ -41,7 +41,7 @@ const INK = {
   land: "#2b4268",
   border: "#3a5383",
   road: "#22375f",
-  label: "#7f8ba3",
+  label: "#a3aec2", // country names: 4.5:1 on the land (AA)
   city: "#a3aec2",
   night: "#040a17",
 };

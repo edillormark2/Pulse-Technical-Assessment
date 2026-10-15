@@ -26,7 +26,7 @@ export default function PersonCard({
           Stranger
         </h2>
         <button type="button" className="icon-button -mr-2" aria-label="Close" onClick={onClose}>
-          <X size={18} weight="bold" />
+          <X size={18} />
         </button>
       </div>
 

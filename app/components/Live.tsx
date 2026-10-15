@@ -40,6 +40,11 @@ export interface PersonView {
   km: number;
 }
 
+/** The tab icon while someone is asking: the dial with a red mark (a drawn mark, not a glyph). */
+const RINGING_ICON = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0a1428"/><circle cx="32" cy="32" r="12" fill="#142344"/><circle cx="32" cy="32" r="21" fill="none" stroke="#22375f" stroke-width="8"/><path d="M50.19 42.5A21 21 0 0 1 13.81 21.5" fill="none" stroke="#dcdfe4" stroke-width="8"/><path d="M32 4V19" stroke="#f3f5f8" stroke-width="4" stroke-linecap="round"/><circle cx="50" cy="14" r="11" fill="#e5483a" stroke="#0a1428" stroke-width="4"/></svg>',
+)}`;
+
 /** How long someone who left keeps a fading mark (matches the CSS). */
 const GONE_MS = 1200;
 
@@ -157,14 +162,19 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     setSelectedId(null);
   }
 
-  // A request should be noticeable even from another tab.
+  // A request should be noticeable even from another tab: the title says so
+  // and the tab's icon carries the red mark until it is answered.
   const ringing = conn.kind === "incoming";
   useEffect(() => {
     if (!ringing) return;
     const previous = document.title;
-    document.title = "● Someone wants to talk · Pulse";
+    document.title = "Someone wants to talk · Pulse";
+    const icons = [...document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')];
+    const hrefs = icons.map((link) => link.href);
+    for (const link of icons) link.href = RINGING_ICON;
     return () => {
       document.title = previous;
+      icons.forEach((link, i) => (link.href = hrefs[i]));
     };
   }, [ringing]);
 

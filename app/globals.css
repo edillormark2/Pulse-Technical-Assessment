@@ -6,12 +6,11 @@
  * and signal red is reserved for the live connection, nothing else.
  */
 @theme {
-  --color-lacquer-950: #0a1428; /* space around the globe */
+  --color-lacquer-950: #0a1428; /* the brand assets' ground (icon, share image) */
   --color-lacquer-900: #0f1b33; /* the dial's ground */
   --color-lacquer-850: #142344; /* panels */
   --color-lacquer-800: #1a2b50; /* raised and hovered surfaces */
   --color-lacquer-700: #22375f; /* the night arc, quiet strokes */
-  --color-lacquer-600: #2d4672; /* land on the globe */
 
   --color-opaline-50: #f3f5f8; /* primary ink */
   --color-opaline-200: #dcdfe4; /* the day arc, secondary ink */
@@ -27,7 +26,6 @@
   /* Emil Kowalski's curves: strong ease-out for UI, ease-in-out for travel. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /*

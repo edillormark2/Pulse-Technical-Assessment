@@ -121,7 +121,7 @@ export default function VideoStage({
           title="End video, keep talking"
           onClick={onEnd}
         >
-          <X size={22} weight="bold" />
+          <X size={22} />
         </button>
       </div>
     </section>
