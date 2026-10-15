@@ -15,11 +15,26 @@ const archivo = Archivo({
   axes: ["wdth"],
 });
 
+const description =
+  "A living globe of anonymous strangers, each at their own hour. Tap a dot, ask to talk, and if they say yes you're connected. No account, nothing kept.";
+
+// Absolute URLs for the share image: the production domain on Vercel.
+const site = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(site),
   title: "Pulse · strangers awake right now",
-  description:
-    "A living globe of anonymous strangers, each at their own hour. Tap a dot, ask to talk, and if they say yes you're connected. No account, nothing kept.",
+  description,
   applicationName: "Pulse",
+  openGraph: {
+    type: "website",
+    siteName: "Pulse",
+    title: "Pulse · strangers awake right now",
+    description,
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {
