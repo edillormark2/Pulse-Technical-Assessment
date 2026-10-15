@@ -152,3 +152,53 @@ where they stood.
 - Ideas the reviewer listed as headroom, not defects: a ring of reference cities around
   the bezel, a red station-clock seconds hand for the 30-second wait, and a stronger
   terminator.
+
+## Phase 3 — Make it secure
+
+### How I reviewed it
+
+I read every API route and the client code that drives them, asked what each endpoint
+trusts, and ran `npm audit`. Then I attacked the running API with a script and kept
+fixing until every attack was refused. That script is committed:
+`npm run test:security` runs 39 checks against a local server.
+
+### What I found, ranked, and what I did
+
+| # | Severity | Issue | Fix |
+|---|---|---|---|
+| 1 | **Critical** | **Anyone could act as anyone.** The session id was the only credential, and `/api/poll` sent every client everyone else's. With someone's id you could drain their mailbox (take their WebRTC offer, answer it, and sit in on their "private" call), send signals as them, end their calls, or remove them from the map. | The server issues a public id plus a 256-bit secret token, and stores only the token's SHA-256. Every call authenticates, and a signal's sender is whoever owns the token, never a field in the body. Poll is now a POST, so tokens never land in URLs or logs. |
+| 2 | **Critical** | **Next.js 16.2.7** has a critical advisory (a proxy/middleware bypass with Turbopack), plus DoS issues and vulnerable postcss and sharp. | Upgraded to 16.4.1 and applied `npm audit fix`. |
+| 3 | **High** | **Calls were whatever clients claimed.** Anyone could accept, decline or end for anyone, mark people busy or free mid-call, push offers and ICE at anyone, and ask the same person forever. | The server records each call as two rows: one per person, inserted in a single INSERT. One call per person is a database guarantee. You can only ask someone free and online, answer someone who asked you, and exchange SDP/ICE with the person you're connected to. "Not now" adds a one-minute cooldown. |
+| 4 | **High** | **No rate limits.** Unlimited joins (fake people), signals (mailbox floods) and polls (about 6 queries each). | Atomic counters in Postgres: 30 joins per 10 minutes per network (a salted IP hash, never the IP); per session, 150 signals per 10 s, 10 asks per minute, and one poll per 100 ms. |
+| 5 | Medium | **The exact location went to the server**, and each rejoin re-rolled the 1–3 km offset, so averaging a few rejoins would close in on the real spot. | The offset is applied on the device, once per visit, and rejoins reuse that same spot. The server never sees raw coordinates. |
+| 6 | Medium | **No security headers.** No CSP, framing was allowed (clickjacking), and camera, mic and location weren't scoped. | A nonce-based CSP with `strict-dynamic`, plus HSTS, nosniff, frame denial, a referrer policy, a Permissions-Policy and COOP. |
+| 7 | Medium | **Unbounded input.** 64 KB payloads were accepted on any signal type, and everything a stranger sent over the data channel was rendered. | Payloads are capped by type (32 KB SDP, 4 KB ICE, nothing otherwise), bodies at 48 KB before parsing, and other origins are refused. On the data channel: 4 KB frames, 1000-character lines, 20 lines per 5 s, and only the known control words. |
+| 8 | Low | The session id travelled in a GET query string, that GET changed state, and an ngrok dev host was left in the config. | Poll uses POST with an `Authorization` header, and the dev host is removed. |
+
+The migration clears the live-session tables (presence and undelivered signals). Old
+rows carry no token; anyone online simply rejoins.
+
+### Not fixed, and why
+
+- **Peers learn each other's IP address.** WebRTC over STUN exchanges public IPs. The fix
+  is a TURN relay (`iceTransportPolicy: "relay"`) with short-lived credentials minted by
+  the server, which needs a TURN provider such as Cloudflare or Twilio. It's the first
+  thing I would add.
+- **Prisma CLI advisories** (mysql2, deepmerge-ts). They're build-time tooling, not in
+  the deployed bundle, and the only fix offered is a breaking downgrade. Revisit with
+  Prisma 8.
+- **The Mapbox token** is public by design (`pk.`), but it should be URL-restricted to
+  the Vercel domain in the Mapbox dashboard. That's an account setting.
+- **Abuse inside a chat** (insults, spam) needs block, report and moderation. That's
+  product work beyond the API.
+- **Join limits are per network**, so a botnet with many IPs could still add people
+  slowly. Proof-of-work or a CAPTCHA at join would be the next step.
+
+### How I checked it
+
+- `npm run test:security`: 39 attacks against a running server. All are refused, and a
+  real call still works.
+- `npm test`: 21 unit tests, including tokens, body and origin checks, and IP-key
+  hashing.
+- The full two-person flow (desktop and phone, headless Chromium) on a production build:
+  entry, call, chat, video and goodbye, with zero CSP violations.
