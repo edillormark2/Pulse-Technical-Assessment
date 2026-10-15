@@ -11,13 +11,22 @@ const LEGEND = [
  * `others` is null until the first presence poll lands, so the empty state
  * never flashes before anyone could have been found.
  */
-export default function IdleNote({ others, compact = false }: { others: number | null; compact?: boolean }) {
+export default function IdleNote({
+  others,
+  compact = false,
+  className,
+}: {
+  others: number | null;
+  compact?: boolean;
+  className?: string;
+}) {
   const quiet = others === 0;
   return (
     <div
       className={clsx(
         "card-enter text-[15px] leading-relaxed text-opaline-200",
         compact ? "px-2" : "max-w-[320px]",
+        className,
       )}
     >
       <p className={clsx("leading-snug text-opaline-50", compact ? "text-[19px]" : "text-[20px]")}>

@@ -62,7 +62,8 @@ export default function ChatCard({
             <>
               <p className="numeral text-[44px] leading-none text-signal">{formatClock(person.minutes)}</p>
               <p className="tabular mt-1.5 text-[13px] text-opaline-400">
-                their {person.dayWord} · {formatDistance(person.km)}
+                their {person.dayWord}
+                <span className="hidden sm:inline"> · {formatDistance(person.km)}</span>
               </p>
             </>
           ) : (
@@ -139,9 +140,9 @@ export default function ChatCard({
           maxLength={MAX_MESSAGE}
           placeholder="Say something"
           autoComplete="off"
-          className="h-12 min-w-0 flex-1 rounded-full bg-lacquer-800 px-5 text-opaline-50 placeholder:text-opaline-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-opaline-50"
+          className="h-12 min-w-0 flex-1 rounded-full bg-lacquer-800 px-5 text-opaline-50 placeholder:text-opaline-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-opaline-50"
         />
-        <button type="submit" className="btn btn-primary size-12 shrink-0 p-0" aria-label="Send" disabled={!draft.trim()}>
+        <button type="submit" className="btn btn-primary btn-send size-12 shrink-0 p-0" aria-label="Send" disabled={!draft.trim()}>
           <PaperPlaneRight size={20} weight="fill" />
         </button>
       </form>

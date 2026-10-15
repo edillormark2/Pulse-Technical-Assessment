@@ -158,13 +158,13 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         iceState = state;
         if (peerRef.current === ps) setLink(state);
         if (state === "failed") {
-          dropConnection(ps, peerId, "The connection dropped. Nothing was kept.");
+          dropConnection(ps, peerId, "The connection dropped.");
         } else if (state === "disconnected") {
           // Usually the other side vanished without a goodbye (crashed, lost
           // network). It can also be a blip, so give it a moment to recover.
           setTimeout(() => {
             if (iceState === "disconnected") {
-              dropConnection(ps, peerId, "They left. Nothing was kept.");
+              dropConnection(ps, peerId, "They left.");
             }
           }, DISCONNECT_GRACE_MS);
         }
@@ -173,7 +173,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
         if (connectTimer.current) clearTimeout(connectTimer.current);
         setConn({ kind: "connected", peerId });
       },
-      onChannelClose: () => dropConnection(ps, peerId, "They left. Nothing was kept."),
+      onChannelClose: () => dropConnection(ps, peerId, "They left."),
     });
     peerRef.current = ps;
     setLink("new");
@@ -393,7 +393,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
           c.peerId === sig.fromId
         ) {
           if (c.kind === "incoming") setConn({ kind: "idle" });
-          else teardown("They left. Nothing was kept.");
+          else teardown("They left.");
         }
         break;
       }
@@ -424,7 +424,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     } else if (c.kind === "requesting") {
       teardown("They left before answering.");
     } else if (peerRef.current) {
-      dropConnection(peerRef.current, c.peerId, "They left. Nothing was kept.");
+      dropConnection(peerRef.current, c.peerId, "They left.");
     }
   }
 

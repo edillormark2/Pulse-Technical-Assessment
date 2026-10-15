@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { ArrowsInSimple } from "@phosphor-icons/react";
 import Globe, { type GlobeView, type MarkState } from "./Globe";
@@ -138,27 +138,17 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     };
   }, [ringing]);
 
-  // Mapbox's logo and attribution ride just above the phone sheet, so the
-  // map always carries them while it is visible.
-  const [sheetHeight, setSheetHeight] = useState(0);
-  const sheetRef = useCallback((el: HTMLDivElement) => {
-    const observer = new ResizeObserver(() => setSheetHeight(el.offsetHeight));
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      setSheetHeight(0);
-    };
-  }, []);
-
   const [chatOverVideo, setChatOverVideo] = useState(false);
   const inChat = conn.kind === "connected";
   const videoActive = pulse.video === "active";
   const livePersonView = pulse.livePeer ? describe(pulse.livePeer, me, now) : livePerson;
 
   // Exactly one card at a time, chosen by the state of the conversation.
+  // The chat and its goodbye share one size, so ending never jumps.
+  const chatHeight = layout.compact ? "h-[min(560px,62dvh)]" : "h-[min(640px,calc(100dvh-48px))]";
   let card: React.ReactNode = null;
   if (pulse.ending) {
-    card = <EndingCard messages={pulse.ending.messages} className="max-h-[min(640px,calc(100dvh-48px))]" />;
+    card = <EndingCard messages={pulse.ending.messages} className={chatHeight} />;
   } else if (conn.kind === "incoming") {
     card = <IncomingCard person={livePersonView} onAccept={pulse.acceptIncoming} onDecline={pulse.declineIncoming} />;
   } else if (conn.kind === "requesting" || conn.kind === "connecting") {
@@ -183,21 +173,25 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         onAcceptVideo={pulse.acceptVideo}
         onDeclineVideo={pulse.declineVideo}
         onEnd={() => pulse.endConnection()}
-        className={layout.compact ? "h-[min(560px,62dvh)]" : "h-[min(640px,calc(100dvh-48px))]"}
+        className={chatHeight}
       />
     );
   } else if (selected) {
     card = <PersonCard person={selected} myMinutes={myMinutes} onAsk={ask} onClose={() => setSelectedId(null)} />;
   } else {
-    card = <IdleNote others={pulse.synced ? peers.length : null} compact={layout.compact} />;
+    // While you explore the map up close, the how-to steps aside.
+    card = (
+      <IdleNote
+        others={pulse.synced ? peers.length : null}
+        compact={layout.compact}
+        className={clsx("transition-opacity duration-300", !dialFits && "pointer-events-none opacity-0")}
+      />
+    );
   }
   const idle = !pulse.ending && conn.kind === "idle" && !selected;
 
   return (
-    <main
-      className="fixed inset-0 overflow-hidden bg-lacquer-950"
-      style={{ "--sheet-h": `${sheetHeight}px` } as React.CSSProperties}
-    >
+    <main className="fixed inset-0 overflow-hidden bg-lacquer-950">
       {/* The world, out of reach while a video covers it. */}
       <div className="absolute inset-0" inert={videoActive}>
         <Globe
@@ -230,6 +224,14 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           onSelect={(id) => select(id, true)}
         />
 
+        {/* Zoomed in, the map runs under the header: a scrim keeps it legible. */}
+        <div
+          aria-hidden="true"
+          className={clsx(
+            "pointer-events-none absolute inset-x-0 top-0 h-44 bg-[linear-gradient(to_bottom,rgb(10_20_40/0.92),rgb(10_20_40/0))] transition-opacity duration-300",
+            dialFits ? "opacity-0" : "opacity-100",
+          )}
+        />
         <header className="pointer-events-none absolute left-0 top-0 p-5 sm:p-8">
           <h1 className="numeral text-[34px] leading-none sm:text-[44px]">Pulse</h1>
           <p className="tabular mt-2 text-[15px] text-opaline-200">
@@ -253,7 +255,8 @@ export default function Live({ pulse }: { pulse: Pulse }) {
             type="button"
             className={clsx(
               "btn btn-quiet card-enter absolute h-10 px-4 text-[14px] shadow-[var(--shadow-float)]",
-              layout.compact ? "right-3 top-[max(20px,env(safe-area-inset-top))]" : "bottom-8 left-8",
+              // Phones: under Mapbox's logo, which sits top-right there.
+              layout.compact ? "right-3 top-[max(52px,calc(env(safe-area-inset-top)+40px))]" : "bottom-8 left-8",
             )}
             onClick={() => setRest((n) => n + 1)}
           >
@@ -282,14 +285,10 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         (!videoActive || chatOverVideo) &&
         card && (
           <div
-            // The idle note sits centred in the sheet's space with the logo row
-            // free below it; cards rise from the bottom and lift the logo instead.
-            ref={idle ? undefined : sheetRef}
+            // The idle note sits centred in the sheet's space; cards rise from the bottom.
             className={clsx(
-              "absolute inset-x-0 bottom-0 px-3",
-              idle
-                ? "flex flex-col justify-center pb-[max(48px,calc(env(safe-area-inset-bottom)+40px))]"
-                : "pb-[max(12px,env(safe-area-inset-bottom))]",
+              "absolute inset-x-0 bottom-0 px-3 pb-[max(12px,env(safe-area-inset-bottom))]",
+              idle && "flex flex-col justify-center",
             )}
             style={idle ? { height: layout.padding.bottom } : undefined}
           >
