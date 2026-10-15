@@ -24,6 +24,7 @@ map. Each commit records its before/after evidence.
 | 11 | Camera stayed on after hanging up | A late `getUserMedia` stream was never stopped → one shared request |
 | 12 | Crossing taps → both "declined"; crossing Video → both waiting | Each side rejected the other → a deterministic tie-break; crossing video requests accept each other |
 | 13 | A frozen call for 16–60 s after the other tab closed | Nobody told the survivor → the leave beacon ends the call; a dropped connection hangs up after 5 s |
+| 14 | Some people couldn't get in: "Couldn't find where you are" | Location demanded a fresh, precise fix within 15 s and gave up at the first failure → one fallback that accepts an approximate or recent position, and separate messages for a timeout, a missing position and a block |
 
 - **Local database:** PGlite (`prisma dev`) broke under concurrent connections, so I
   tested on an embedded Postgres.
