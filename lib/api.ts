@@ -34,9 +34,11 @@ export async function sendSignal(
   });
 }
 
-// Fire-and-forget leave that survives the tab closing.
-export function leave(id: string): void {
-  const body = JSON.stringify({ id });
+// Fire-and-forget leave that survives the tab closing. `peerId` is whoever we
+// are connected to (or negotiating with): a closing tab does not shut its
+// WebRTC connection down gracefully, so the server tells them for us.
+export function leave(id: string, peerId?: string): void {
+  const body = JSON.stringify({ id, peerId });
   if (typeof navigator !== "undefined" && navigator.sendBeacon) {
     navigator.sendBeacon("/api/leave", body);
   } else {

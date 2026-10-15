@@ -4,14 +4,18 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/leave — body { id }. Removes the presence row and any pending
-// signals to/from this user. Called via navigator.sendBeacon on tab close, so
-// the body may arrive as text — parse defensively.
+// POST /api/leave — body { id, peerId? }. Removes the presence row and any
+// pending signals to/from this user, then ends the call with `peerId` if one
+// was in progress. Called via navigator.sendBeacon on tab close, so the body
+// may arrive as text — parse defensively.
 export async function POST(request: NextRequest) {
-  let id: string | undefined;
+  let id: unknown;
+  let peerId: unknown;
   try {
     const text = await request.text();
-    id = text ? (JSON.parse(text)?.id as string | undefined) : undefined;
+    const body = text ? JSON.parse(text) : null;
+    id = body?.id;
+    peerId = body?.peerId;
   } catch {
     id = undefined;
   }
@@ -26,6 +30,20 @@ export async function POST(request: NextRequest) {
     where: { OR: [{ toId: id }, { fromId: id }] },
   });
   await prisma.presence.deleteMany({ where: { id } });
+
+  // A closing tab drops its WebRTC connection without telling the other side,
+  // which would otherwise sit in a frozen call (camera on) until ICE gives up
+  // ~30s later. Say goodbye on the leaver's behalf, after the cleanup above so
+  // this "end" is not deleted with the rest.
+  if (typeof peerId === "string" && peerId && peerId !== id) {
+    await prisma.signal.create({
+      data: { fromId: id, toId: peerId, type: "end", payload: null },
+    });
+    await prisma.presence.updateMany({
+      where: { id: peerId },
+      data: { busy: false },
+    });
+  }
 
   return Response.json({ ok: true });
 }

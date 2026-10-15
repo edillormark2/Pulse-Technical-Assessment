@@ -23,6 +23,9 @@ type VideoState = "none" | "requesting" | "incoming" | "active";
 const REQUEST_TIMEOUT_MS = 30_000;
 // After an accept, how long the data channel may take to open before we give up.
 const CONNECT_TIMEOUT_MS = 20_000;
+// How long a "disconnected" ICE connection may take to recover before we hang
+// up. Left alone, ICE only declares "failed" after ~30s of silence.
+const DISCONNECT_GRACE_MS = 5_000;
 
 export default function Home() {
   const [phase, setPhase] = useState<"gate" | "live">("gate");
@@ -91,6 +94,7 @@ export default function Home() {
     // mailbox out of order, and SDP applied out of order (a stale offer after
     // a newer answer) breaks renegotiation when video starts or stops.
     let outbox: Promise<void> = Promise.resolve();
+    let iceState: RTCPeerConnectionState = "new";
     const ps = new PeerSession(initiator, {
       onSignal: (type: DescType, payload: string) => {
         outbox = outbox
@@ -101,8 +105,17 @@ export default function Home() {
       onControl: (ctrl) => handleControl(ctrl),
       onRemoteStream: (stream) => setRemoteStream(stream),
       onConnectionState: (state) => {
+        iceState = state;
         if (state === "failed") {
           dropConnection(ps, peerId, "Connection failed (network).");
+        } else if (state === "disconnected") {
+          // Usually the other side vanished without a goodbye (crashed, lost
+          // network). It can also be a blip, so give it a moment to recover.
+          setTimeout(() => {
+            if (iceState === "disconnected") {
+              dropConnection(ps, peerId, "Stranger disconnected.");
+            }
+          }, DISCONNECT_GRACE_MS);
         }
       },
       onChannelOpen: () => {
@@ -363,15 +376,17 @@ export default function Home() {
     };
   }, [phase, sessionId, myLocation]);
 
+  // pagehide is the one reliable "this page is going away" event (it also
+  // fires on mobile and bfcache); a beforeunload listener only sent a second,
+  // racing beacon and can make the page ineligible for the bfcache.
   useEffect(() => {
     if (!sessionId || phase !== "live") return;
-    const onLeave = () => leave(sessionId);
-    window.addEventListener("pagehide", onLeave);
-    window.addEventListener("beforeunload", onLeave);
-    return () => {
-      window.removeEventListener("pagehide", onLeave);
-      window.removeEventListener("beforeunload", onLeave);
+    const onLeave = () => {
+      const c = connRef.current;
+      leave(sessionId, c.kind === "idle" ? undefined : c.peerId);
     };
+    window.addEventListener("pagehide", onLeave);
+    return () => window.removeEventListener("pagehide", onLeave);
   }, [sessionId, phase]);
 
   async function handleReady(lat: number, lng: number) {
