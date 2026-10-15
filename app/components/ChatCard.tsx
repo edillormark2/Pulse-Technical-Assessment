@@ -7,8 +7,7 @@ import type { PersonView } from "./Live";
 import type { ChatMessage, VideoState } from "@/lib/use-pulse";
 import { formatClock } from "@/lib/sun";
 import { formatDistance } from "@/lib/use-world-clock";
-
-const MAX_MESSAGE = 1000;
+import { MAX_CHAT } from "@/lib/webrtc";
 
 /** The live conversation: their hour on top, the talk, and how to end it. */
 export default function ChatCard({
@@ -141,7 +140,7 @@ export default function ChatCard({
           id="chat-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          maxLength={MAX_MESSAGE}
+          maxLength={MAX_CHAT}
           placeholder="Say something"
           autoComplete="off"
           className="h-12 min-w-0 flex-1 rounded-full bg-lacquer-800 px-5 text-opaline-50 placeholder:text-opaline-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-opaline-50"

@@ -1,9 +1,16 @@
 export type DescType = "offer" | "answer" | "ice";
-export type PeerControl =
-  | "video-request"
-  | "video-accept"
-  | "video-decline"
-  | "video-end";
+const CONTROLS = ["video-request", "video-accept", "video-decline", "video-end"] as const;
+export type PeerControl = (typeof CONTROLS)[number];
+
+// The other person is a stranger, so what arrives over the data channel is
+// checked like any untrusted input: bounded in size, rate and vocabulary.
+/** Anything longer is not a chat line or a control word; drop it unread. */
+const MAX_FRAME = 4096;
+/** Matches the composer's limit. */
+export const MAX_CHAT = 1000;
+/** A flood of lines is dropped rather than painted: 20 per 5 seconds. */
+const CHAT_BURST = 20;
+const CHAT_WINDOW_MS = 5_000;
 
 interface PeerCallbacks {
   onSignal: (type: DescType, payload: string) => void;
@@ -33,6 +40,8 @@ export class PeerSession {
   private pendingCandidates: RTCIceCandidateInit[] = [];
   // Incoming signals are applied strictly one at a time, in delivery order.
   private signalChain: Promise<void> = Promise.resolve();
+  // When the latest incoming chat lines arrived, for the flood limit.
+  private chatTimes: number[] = [];
 
   constructor(initiator: boolean, cb: PeerCallbacks) {
     this.cb = cb;
@@ -84,15 +93,24 @@ export class PeerSession {
       if (!this.closed) this.cb.onChannelClose();
     };
     dc.onmessage = (e) => {
+      if (typeof e.data !== "string" || e.data.length > MAX_FRAME) return;
       try {
-        const msg = JSON.parse(e.data as string);
-        if (msg.t === "chat" && typeof msg.text === "string") {
-          this.cb.onChat(msg.text);
-        } else if (msg.t === "ctrl" && typeof msg.ctrl === "string") {
+        const msg = JSON.parse(e.data) as { t?: unknown; text?: unknown; ctrl?: unknown };
+        if (msg.t === "chat" && typeof msg.text === "string" && msg.text.trim()) {
+          if (this.withinChatBurst()) this.cb.onChat(msg.text.slice(0, MAX_CHAT));
+        } else if (msg.t === "ctrl" && CONTROLS.includes(msg.ctrl as PeerControl)) {
           this.cb.onControl(msg.ctrl as PeerControl);
         }
       } catch {}
     };
+  }
+
+  private withinChatBurst(): boolean {
+    const now = Date.now();
+    this.chatTimes = this.chatTimes.filter((t) => now - t < CHAT_WINDOW_MS);
+    if (this.chatTimes.length >= CHAT_BURST) return false;
+    this.chatTimes.push(now);
+    return true;
   }
 
   // A poll can deliver a whole batch at once (e.g. [offer, ice, ice]). Applied
@@ -154,7 +172,7 @@ export class PeerSession {
 
   sendChat(text: string) {
     // Must match the tag the receiver checks in wireDataChannel().
-    this.safeSend({ t: "chat", text });
+    this.safeSend({ t: "chat", text: text.slice(0, MAX_CHAT) });
   }
 
   sendControl(ctrl: PeerControl) {
