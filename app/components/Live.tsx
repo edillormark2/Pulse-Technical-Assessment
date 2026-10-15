@@ -188,9 +188,10 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     );
   } else if (selected) {
     card = <PersonCard person={selected} myMinutes={myMinutes} onAsk={ask} onClose={() => setSelectedId(null)} />;
-  } else if (!layout.compact) {
-    card = <IdleNote others={pulse.synced ? peers.length : null} />;
+  } else {
+    card = <IdleNote others={pulse.synced ? peers.length : null} compact={layout.compact} />;
   }
+  const idle = !pulse.ending && conn.kind === "idle" && !selected;
 
   return (
     <main
@@ -280,7 +281,18 @@ export default function Live({ pulse }: { pulse: Pulse }) {
       {layout.compact ? (
         (!videoActive || chatOverVideo) &&
         card && (
-          <div ref={sheetRef} className="absolute inset-x-0 bottom-0 px-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+          <div
+            // The idle note sits centred in the sheet's space with the logo row
+            // free below it; cards rise from the bottom and lift the logo instead.
+            ref={idle ? undefined : sheetRef}
+            className={clsx(
+              "absolute inset-x-0 bottom-0 px-3",
+              idle
+                ? "flex flex-col justify-center pb-[max(48px,calc(env(safe-area-inset-bottom)+40px))]"
+                : "pb-[max(12px,env(safe-area-inset-bottom))]",
+            )}
+            style={idle ? { height: layout.padding.bottom } : undefined}
+          >
             {videoActive && (
               <button type="button" className="btn btn-quiet mb-2 h-10 w-full text-[14px]" onClick={() => setChatOverVideo(false)}>
                 Back to video
