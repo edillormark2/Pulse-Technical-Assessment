@@ -1,0 +1,127 @@
+WEBVTT
+
+1
+00:00:04.550 --> 00:00:07.886
+This is Pulse, a live globe
+of anonymous strangers.
+
+2
+00:00:07.936 --> 00:00:08.929
+Let's walk through it.
+
+3
+00:00:10.256 --> 00:00:14.356
+Four phases, weighted fifteen,
+thirty, twenty and thirty percent,
+
+4
+00:00:14.406 --> 00:00:15.806
+plus five for delivery.
+
+5
+00:00:16.306 --> 00:00:19.456
+Phase one, make it run:
+thirteen bugs fixed,
+
+6
+00:00:19.506 --> 00:00:23.061
+from ghost dots that never left,
+to calls that never connected.
+
+7
+00:00:24.324 --> 00:00:27.261
+Phase two, make it good:
+a world-time dial.
+
+8
+00:00:27.311 --> 00:00:30.419
+You arrive at your own hour,
+then tap, Show me who's awake.
+
+9
+00:00:30.619 --> 00:00:33.228
+Everyone sits on the ring
+at their local hour.
+
+10
+00:00:33.278 --> 00:00:37.651
+Filled is free, hollow is busy,
+and scrolling zooms the real map.
+
+11
+00:00:37.851 --> 00:00:40.143
+Pick someone, see their hour and distance,
+
+12
+00:00:40.193 --> 00:00:44.030
+and ask to talk. A sweep hand
+counts their thirty seconds.
+
+13
+00:00:44.230 --> 00:00:46.836
+They tap Talk, a red arc joins your hours,
+
+14
+00:00:46.886 --> 00:00:50.074
+and the chat opens. Either
+side can ask for video.
+
+15
+00:00:50.974 --> 00:00:54.666
+Not now, no answer, or they left:
+every ending is spelled out,
+
+16
+00:00:54.716 --> 00:00:55.821
+and nothing is kept.
+
+17
+00:00:56.308 --> 00:00:59.796
+Phase three, make it secure:
+secret session tokens,
+
+18
+00:00:59.846 --> 00:01:03.658
+server-enforced calls, rate
+limits, on-device location blur,
+
+19
+00:01:03.708 --> 00:01:06.808
+and a strict content
+policy. Forty-two attacks,
+
+20
+00:01:06.858 --> 00:01:07.870
+all refused.
+
+21
+00:01:08.324 --> 00:01:13.286
+Phase four, make it better: Daybreak.
+Strangers whose sun rises within half
+
+22
+00:01:13.336 --> 00:01:16.375
+an hour get a horizon on
+their mark, and a countdown.
+
+23
+00:01:16.675 --> 00:01:20.561
+Tap, Watch their sunrise, and a
+sky strip tracks their real sun,
+
+24
+00:01:20.611 --> 00:01:21.310
+to the second.
+
+25
+00:01:24.300 --> 00:01:26.251
+Every flow works on phones, too.
+
+26
+00:01:26.601 --> 00:01:29.694
+Public repo, live on Vercel,
+notes for every phase.
+
+27
+00:01:29.744 --> 00:01:30.574
+That's Pulse.
