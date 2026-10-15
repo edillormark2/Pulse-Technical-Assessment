@@ -19,7 +19,7 @@
   --color-opaline-500: #7f8ba3; /* faint ink, AA on ground and panel only */
 
   --color-signal: #e5483a; /* the live connection: marks, arcs, large numerals */
-  --color-signal-strong: #cf3a2c; /* filled controls carrying white text (AA) */
+  --color-signal-strong: #cf3a2c; /* filled controls behind white icons (3:1 non-text) */
 
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-archivo), var(--font-geist), ui-sans-serif, sans-serif;
@@ -30,261 +30,438 @@
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-:root {
-  color-scheme: dark;
-  --radius-panel: 28px;
-  --shadow-float: 0 24px 48px -16px rgb(5 10 22 / 0.7), 0 8px 16px -8px rgb(5 10 22 / 0.5);
+/*
+ * Layers: base styles and the interface's own vocabulary (cards, buttons,
+ * marks, the dial) sit in Tailwind's layers, so a utility on an element can
+ * still adjust them. Only rules that must outrank Mapbox's stylesheet, which
+ * loads later and unlayered, stay outside.
+ */
+@layer base {
+  :root {
+    color-scheme: dark;
+    --radius-panel: 28px;
+    --shadow-float: 0 24px 48px -16px rgb(5 10 22 / 0.7), 0 8px 16px -8px rgb(5 10 22 / 0.5);
+  }
+
+  html {
+    background: var(--color-lacquer-900);
+    /* Mobile app-shell baseline (no tap flash, no font inflation, no rubber band). */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background: var(--color-lacquer-900);
+    color: var(--color-opaline-50);
+    font-family: var(--font-sans);
+    caret-color: var(--color-opaline-50);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Browser surfaces carry the design too. */
+  ::selection {
+    background: var(--color-opaline-200);
+    color: var(--color-lacquer-900);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-lacquer-700) transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-opaline-50);
+    outline-offset: 3px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* below 16px, iOS zooms the page on focus */
+  }
+
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 
-html {
-  background: var(--color-lacquer-900);
-  /* Mobile app-shell baseline (no tap flash, no font inflation, no rubber band). */
-  -webkit-tap-highlight-color: transparent;
-  -webkit-text-size-adjust: 100%;
-  overscroll-behavior: none;
-}
+@layer components {
+  /* Every hour and count is set in tabular figures so digits never jitter. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
 
-body {
-  background: var(--color-lacquer-900);
-  color: var(--color-opaline-50);
-  font-family: var(--font-sans);
-  caret-color: var(--color-opaline-50);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  /* The dial's voice: condensed Archivo for the wordmark and every hour. */
+  .numeral {
+    font-family: var(--font-display);
+    font-stretch: 72%;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
 
-/* Browser surfaces carry the design too. */
-::selection {
-  background: var(--color-opaline-200);
-  color: var(--color-lacquer-900);
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-lacquer-700) transparent;
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-opaline-50);
-  outline-offset: 3px;
-}
-
-input,
-textarea,
-select {
-  font-size: 16px; /* below 16px, iOS zooms the page on focus */
-}
-
-button,
-a,
-[role="button"] {
-  touch-action: manipulation;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Every hour and count is set in tabular figures so digits never jitter. */
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-
-/* The dial's voice: condensed Archivo for the wordmark and every hour. */
-.numeral {
-  font-family: var(--font-display);
-  font-stretch: 72%;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
-/* Panels sit over the globe as raised lacquer, never glass. */
-.card {
-  border-radius: var(--radius-panel);
-  background: var(--color-lacquer-850);
-  padding: 24px;
-  box-shadow: var(--shadow-float);
-}
-.card-enter {
-  transition:
-    opacity 240ms var(--ease-out),
-    transform 240ms var(--ease-out),
-    filter 240ms var(--ease-out);
-}
-@starting-style {
+  /* Panels sit over the globe as raised lacquer, never glass. */
+  .card {
+    border-radius: var(--radius-panel);
+    background: var(--color-lacquer-850);
+    padding: 24px;
+    box-shadow: var(--shadow-float);
+  }
   .card-enter {
-    opacity: 0;
-    transform: translateY(8px);
-    filter: blur(4px);
+    transition:
+      opacity 240ms var(--ease-out),
+      transform 240ms var(--ease-out),
+      filter 240ms var(--ease-out);
   }
-}
+  @starting-style {
+    .card-enter {
+      opacity: 0;
+      transform: translateY(8px);
+      filter: blur(4px);
+    }
+  }
 
-.btn {
-  display: inline-flex;
-  height: 48px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 999px;
-  padding: 0 24px;
-  font-size: 16px;
-  font-weight: 600;
-  transition:
-    transform 140ms var(--ease-out),
-    background-color 160ms ease,
-    color 160ms ease,
-    opacity 160ms ease;
-}
-.btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.btn-primary {
-  background: var(--color-opaline-50);
-  color: var(--color-lacquer-900);
-}
-.btn-quiet {
-  background: var(--color-lacquer-800);
-  color: var(--color-opaline-50);
-}
-.btn-signal {
-  background: var(--color-signal-strong);
-  color: #fff;
-}
-.icon-button {
-  display: inline-grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border-radius: 999px;
-  color: var(--color-opaline-200);
-  transition:
-    transform 140ms var(--ease-out),
-    background-color 160ms ease,
-    color 160ms ease;
-}
-.icon-button:active {
-  transform: scale(0.94);
-}
-.icon-button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.icon-button--end {
-  color: var(--color-signal);
-}
-
-/* Video controls: large round targets on the stage. */
-.round-control {
-  display: inline-grid;
-  width: 56px;
-  height: 56px;
-  place-items: center;
-  border-radius: 999px;
-  background: rgb(26 43 80 / 0.92);
-  color: var(--color-opaline-50);
-  transition:
-    transform 140ms var(--ease-out),
-    background-color 160ms ease;
-}
-.round-control:active {
-  transform: scale(0.94);
-}
-.round-control--off {
-  background: var(--color-opaline-50);
-  color: var(--color-lacquer-900);
-}
-.round-control--end {
-  background: var(--color-signal-strong);
-  color: #fff;
-}
-
-/* Steps of a wait: done, happening now, still to come (the state grammar). */
-.stage-mark {
-  width: 9px;
-  height: 9px;
-  flex: none;
-  border-radius: 999px;
-}
-.stage-mark--done {
-  background: var(--color-opaline-50);
-}
-.stage-mark--current {
-  background: var(--color-signal);
-  animation: dot-ring 1.4s var(--ease-out) infinite;
-}
-.stage-mark--pending {
-  box-shadow: inset 0 0 0 2px var(--color-lacquer-700);
-}
-
-/* Messages. Yours in opaline, theirs in lacquer; new ones rise in. */
-.bubble {
-  max-width: 82%;
-  padding: 10px 14px;
-  border-radius: 18px;
-  font-size: 15px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  transition:
-    opacity 200ms var(--ease-out),
-    transform 200ms var(--ease-out);
-}
-@starting-style {
-  .bubble {
-    opacity: 0;
-    transform: translateY(6px);
+  .btn {
+    display: inline-flex;
+    height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 0 24px;
+    font-size: 16px;
+    font-weight: 600;
+    transition:
+      transform 140ms var(--ease-out),
+      background-color 160ms ease,
+      color 160ms ease,
+      opacity 160ms ease;
   }
-}
-.bubble--mine {
-  background: var(--color-opaline-50);
-  color: var(--color-lacquer-900);
-  border-bottom-right-radius: 6px;
-}
-.bubble--theirs {
-  background: var(--color-lacquer-800);
-  color: var(--color-opaline-50);
-  border-bottom-left-radius: 6px;
-}
-/* Goodbye: the conversation dissolves, newest last. */
-.bubble--dissolve {
-  animation: dissolve 700ms var(--ease-out) forwards;
-}
-@keyframes dissolve {
-  to {
-    opacity: 0;
-    filter: blur(6px);
-    transform: translateY(-6px) scale(0.98);
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
   }
-}
-@media (hover: hover) and (pointer: fine) {
-  .btn-primary:hover {
-    background: #fff;
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
-  .btn-quiet:hover {
-    background: var(--color-lacquer-700);
+  .btn-primary {
+    background: var(--color-opaline-50);
+    color: var(--color-lacquer-900);
   }
-  .btn-signal:hover {
-    background: #b9301f;
-  }
-  .icon-button:not(:disabled):hover {
+  .btn-quiet {
     background: var(--color-lacquer-800);
     color: var(--color-opaline-50);
   }
-  .icon-button--end:not(:disabled):hover {
-    background: rgb(229 72 58 / 0.14);
+  /* Send rests quiet until there is something to send (icon stays legible). */
+  .btn-send:disabled {
+    opacity: 1;
+    background: var(--color-lacquer-800);
+    color: var(--color-opaline-400);
+  }
+  .icon-button {
+    display: inline-grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border-radius: 999px;
+    color: var(--color-opaline-200);
+    transition:
+      transform 140ms var(--ease-out),
+      background-color 160ms ease,
+      color 160ms ease;
+  }
+  .icon-button:active {
+    transform: scale(0.94);
+  }
+  .icon-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .icon-button--end {
     color: var(--color-signal);
   }
-  .round-control:hover {
-    background: var(--color-lacquer-700);
+
+  /* Video controls: large round targets on the stage. */
+  .round-control {
+    display: inline-grid;
+    width: 56px;
+    height: 56px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgb(26 43 80 / 0.92);
+    color: var(--color-opaline-50);
+    transition:
+      transform 140ms var(--ease-out),
+      background-color 160ms ease;
   }
-  .round-control--off:hover {
-    background: #fff;
+  .round-control:active {
+    transform: scale(0.94);
   }
-  .round-control--end:hover {
-    background: #b9301f;
+  .round-control--off {
+    background: var(--color-opaline-50);
+    color: var(--color-lacquer-900);
+  }
+  .round-control--end {
+    background: var(--color-signal-strong);
+    color: #fff;
+  }
+
+  /* Steps of a wait: done, happening now, still to come (the state grammar). */
+  .stage-mark {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    border-radius: 999px;
+  }
+  .stage-mark--done {
+    background: var(--color-opaline-50);
+  }
+  .stage-mark--current {
+    background: var(--color-signal);
+    animation: dot-ring 1.4s var(--ease-out) infinite;
+  }
+  .stage-mark--pending {
+    box-shadow: inset 0 0 0 2px var(--color-lacquer-700);
+  }
+
+  /* Messages. Yours in opaline, theirs in lacquer; new ones rise in. */
+  .bubble {
+    max-width: 82%;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    transition:
+      opacity 200ms var(--ease-out),
+      transform 200ms var(--ease-out);
+  }
+  @starting-style {
+    .bubble:not(.bubble--dissolve) {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  .bubble--mine {
+    background: var(--color-opaline-50);
+    color: var(--color-lacquer-900);
+    border-bottom-right-radius: 6px;
+  }
+  .bubble--theirs {
+    background: var(--color-lacquer-800);
+    color: var(--color-opaline-50);
+    border-bottom-left-radius: 6px;
+  }
+  /* Goodbye: the conversation holds for a beat where it was, then dissolves,
+     newest first. */
+  .bubble--dissolve {
+    animation: dissolve 1000ms var(--ease-in-out) both;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:hover {
+      background: #fff;
+    }
+    .btn-quiet:hover {
+      background: var(--color-lacquer-700);
+    }
+    .icon-button:not(:disabled):hover {
+      background: var(--color-lacquer-800);
+      color: var(--color-opaline-50);
+    }
+    .icon-button--end:not(:disabled):hover {
+      background: rgb(229 72 58 / 0.14);
+      color: var(--color-signal);
+    }
+    .round-control:hover {
+      background: var(--color-lacquer-700);
+    }
+    .round-control--off:hover {
+      background: #fff;
+    }
+    .round-control--end:hover {
+      background: #b9301f;
+    }
+  }
+
+  /* The dial's people track: the same marks, as real buttons (the keyboard path). */
+  .dial-mark {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    cursor: pointer;
+  }
+  .dial-mark:disabled {
+    cursor: default;
+  }
+  .dial-mark:focus-visible {
+    outline: 2px solid var(--color-opaline-50);
+    outline-offset: 1px;
+  }
+  .dial-mark__core {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--color-opaline-50);
+    transition:
+      transform 180ms var(--ease-out),
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .dial-mark[data-state="busy"] .dial-mark__core {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--color-opaline-200);
+  }
+  .dial-mark[data-state="selected"] .dial-mark__core {
+    transform: scale(1.6);
+  }
+  .dial-mark[data-state="calling"] .dial-mark__core,
+  .dial-mark[data-state="ringing"] .dial-mark__core,
+  .dial-mark[data-state="talking"] .dial-mark__core {
+    background: var(--color-signal);
+    transform: scale(1.5);
+  }
+  .dial-mark[data-state="ringing"] .dial-mark__core {
+    animation: dot-ring 1.4s var(--ease-out) infinite;
+  }
+  .dial-mark:active .dial-mark__core {
+    transform: scale(0.9);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .dial-mark:not(:disabled):hover .dial-mark__core {
+      transform: scale(1.6);
+    }
+  }
+  .dial-mark--reveal {
+    animation: mark-in 380ms var(--ease-out) both;
+  }
+
+  /* Arrival: the band fades up, then the hours light clockwise from yours and
+     your hour develops inside the ring. Opacity only, so nothing moves. */
+  .dial-enter svg {
+    animation: fade-in 400ms var(--ease-out) both;
+  }
+  .dial-hour-in {
+    animation: fade-in 260ms var(--ease-out) both;
+  }
+  .hour-face--enter {
+    animation: fade-in 700ms var(--ease-out) 150ms both;
+  }
+  .hour-face--enter .hour-face__text {
+    animation: fade-in 600ms var(--ease-out) 450ms both;
+  }
+  .fade-in {
+    animation: fade-in 500ms var(--ease-out) both;
+  }
+
+  /* Waits develop: the 30-second window, swept by a red hand. */
+  .dial-countdown {
+    fill: none;
+    stroke: var(--color-signal);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0.55;
+    animation: dial-draw 30s linear forwards;
+  }
+  .dial-sweep {
+    transform-box: view-box;
+    animation: dial-sweep 30s linear forwards;
+  }
+
+  /* The call arc: the one authored moment. */
+  .dial-arc {
+    fill: none;
+    stroke: var(--color-signal);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+  .dial-arc--dotted {
+    stroke-dasharray: 0.004 0.016;
+  }
+  .dial-arc--solid {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: dial-draw 700ms var(--ease-in-out) forwards;
+  }
+  .dial-arc--retract {
+    stroke-dasharray: 1;
+    animation: dial-retract 600ms var(--ease-in-out) forwards;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dial-sweep,
+    .dial-countdown {
+      display: none; /* a frozen sweep would misreport the time left */
+    }
+    .dial-arc--solid {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+    .dial-arc--retract {
+      animation: fade-out 300ms ease forwards;
+    }
+  }
+}
+
+@keyframes mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes dial-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes dial-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes dial-retract {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dissolve {
+  0%,
+  30% {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(-6px) scale(0.98);
   }
 }
 
@@ -308,18 +485,21 @@ a,
   }
 }
 
+/* On phones the panel rises from the bottom, so Mapbox's logo and attribution
+   move to the top-right beside the header, where nothing ever covers them. */
+@media (max-width: 767.98px) {
+  .mapboxgl-control-container > .mapboxgl-ctrl-bottom-right {
+    top: max(14px, env(safe-area-inset-top));
+    bottom: auto;
+  }
+}
+
 /*
  * People on the globe. One mark per state, the same grammar as the dial:
  * free = filled opaline, busy = hollow ring, selected = grown,
  * calling / talking = signal red, ringing = red and pulsing (someone is asking you).
+ * Unlayered: these sit on Mapbox's marker elements.
  */
-/* Mapbox's logo and attribution ride above the phone sheet (Live sets
-   --sheet-h), so they stay on the visible map. */
-.mapboxgl-ctrl-bottom-left,
-.mapboxgl-ctrl-bottom-right {
-  bottom: var(--sheet-h, 0px);
-  transition: bottom 240ms var(--ease-out);
-}
 
 .globe-dot {
   width: 32px; /* generous touch target around a small mark */
@@ -374,166 +554,6 @@ a,
   }
   to {
     box-shadow: 0 0 0 2px var(--color-lacquer-900), 0 0 0 14px rgb(229 72 58 / 0);
-  }
-}
-
-/* The dial's people track: the same marks, as real buttons (the keyboard path). */
-.dial-mark {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  margin: -14px 0 0 -14px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  cursor: pointer;
-}
-.dial-mark:disabled {
-  cursor: default;
-}
-.dial-mark:focus-visible {
-  outline: 2px solid var(--color-opaline-50);
-  outline-offset: 1px;
-}
-.dial-mark__core {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--color-opaline-50);
-  transition:
-    transform 180ms var(--ease-out),
-    background-color 180ms ease,
-    box-shadow 180ms ease;
-}
-.dial-mark[data-state="busy"] .dial-mark__core {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px var(--color-opaline-200);
-}
-.dial-mark[data-state="selected"] .dial-mark__core {
-  transform: scale(1.6);
-}
-.dial-mark[data-state="calling"] .dial-mark__core,
-.dial-mark[data-state="ringing"] .dial-mark__core,
-.dial-mark[data-state="talking"] .dial-mark__core {
-  background: var(--color-signal);
-  transform: scale(1.5);
-}
-.dial-mark[data-state="ringing"] .dial-mark__core {
-  animation: dot-ring 1.4s var(--ease-out) infinite;
-}
-.dial-mark:active .dial-mark__core {
-  transform: scale(0.9);
-}
-@media (hover: hover) and (pointer: fine) {
-  .dial-mark:not(:disabled):hover .dial-mark__core {
-    transform: scale(1.6);
-  }
-}
-.dial-mark--reveal {
-  animation: mark-in 380ms var(--ease-out) both;
-}
-@keyframes mark-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-}
-
-/* Arrival: the band fades up, then the hours light clockwise from yours and
-   your hour develops inside the ring. Opacity only, so nothing moves. */
-.dial-enter svg {
-  animation: fade-in 400ms var(--ease-out) both;
-}
-.dial-hour-in {
-  animation: fade-in 260ms var(--ease-out) both;
-}
-.hour-face--enter {
-  animation: fade-in 700ms var(--ease-out) 150ms both;
-}
-.hour-face--enter .hour-face__text {
-  animation: fade-in 600ms var(--ease-out) 450ms both;
-}
-.fade-in {
-  animation: fade-in 500ms var(--ease-out) both;
-}
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-}
-
-/* Waits develop: the 30-second window, swept by a red hand. */
-.dial-countdown {
-  fill: none;
-  stroke: var(--color-signal);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  opacity: 0.55;
-  animation: dial-draw 30s linear forwards;
-}
-.dial-sweep {
-  transform-box: view-box;
-  animation: dial-sweep 30s linear forwards;
-}
-@keyframes dial-sweep {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* The call arc: the one authored moment. */
-.dial-arc {
-  fill: none;
-  stroke: var(--color-signal);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.dial-arc--dotted {
-  stroke-dasharray: 0.004 0.016;
-}
-.dial-arc--solid {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: dial-draw 700ms var(--ease-in-out) forwards;
-}
-@keyframes dial-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-.dial-arc--retract {
-  stroke-dasharray: 1;
-  animation: dial-retract 600ms var(--ease-in-out) forwards;
-}
-@keyframes dial-retract {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dial-sweep,
-  .dial-countdown {
-    display: none; /* a frozen sweep would misreport the time left */
-  }
-  .dial-arc--solid {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
-  .dial-arc--retract {
-    animation: fade-out 300ms ease forwards;
-  }
-}
-@keyframes fade-out {
-  to {
-    opacity: 0;
   }
 }
 
