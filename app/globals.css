@@ -88,6 +88,102 @@ a,
   font-variant-numeric: tabular-nums;
 }
 
+/* The dial's voice: condensed Archivo for the wordmark and every hour. */
+.numeral {
+  font-family: var(--font-display);
+  font-stretch: 72%;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Panels sit over the globe as raised lacquer, never glass. */
+.card {
+  border-radius: var(--radius-panel);
+  background: var(--color-lacquer-850);
+  padding: 24px;
+  box-shadow: var(--shadow-float);
+}
+.card-enter {
+  transition:
+    opacity 240ms var(--ease-out),
+    transform 240ms var(--ease-out),
+    filter 240ms var(--ease-out);
+}
+@starting-style {
+  .card-enter {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+}
+
+.btn {
+  display: inline-flex;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 0 24px;
+  font-size: 16px;
+  font-weight: 600;
+  transition:
+    transform 140ms var(--ease-out),
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--color-opaline-50);
+  color: var(--color-lacquer-900);
+}
+.btn-quiet {
+  background: var(--color-lacquer-800);
+  color: var(--color-opaline-50);
+}
+.btn-signal {
+  background: var(--color-signal-strong);
+  color: #fff;
+}
+.icon-button {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--color-opaline-200);
+  transition:
+    transform 140ms var(--ease-out),
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.icon-button:active {
+  transform: scale(0.94);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover {
+    background: #fff;
+  }
+  .btn-quiet:hover {
+    background: var(--color-lacquer-700);
+  }
+  .btn-signal:hover {
+    background: #b9301f;
+  }
+  .icon-button:hover {
+    background: var(--color-lacquer-800);
+    color: var(--color-opaline-50);
+  }
+}
+
 /* Mapbox attribution is required; set it in the dial's own quiet ink. */
 .mapboxgl-ctrl-attrib.mapboxgl-compact,
 .mapboxgl-ctrl-attrib {
@@ -108,55 +204,203 @@ a,
   }
 }
 
-/* Live user dots on the map */
-.pulse-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 9999px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  cursor: pointer;
+/*
+ * People on the globe. One mark per state, the same grammar as the dial:
+ * free = filled opaline, busy = hollow ring, selected = grown,
+ * calling / talking = signal red, ringing = red and pulsing (someone is asking you).
+ */
+.globe-dot {
+  width: 32px; /* generous touch target around a small mark */
+  height: 32px;
+  display: grid;
+  place-items: center;
   padding: 0;
-  box-shadow: 0 0 0 rgba(255, 255, 255, 0.5);
-  animation: pulse-ring 2s ease-out infinite;
-  transition: transform 0.1s ease;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.globe-dot__core {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-opaline-50);
+  box-shadow: 0 0 0 2px var(--color-lacquer-900);
+  transition:
+    transform 180ms var(--ease-out),
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.globe-dot[data-state="busy"] .globe-dot__core {
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 2px var(--color-opaline-200),
+    0 0 0 2px var(--color-lacquer-900);
+}
+.globe-dot[data-state="selected"] .globe-dot__core {
+  transform: scale(1.5);
+}
+.globe-dot[data-state="calling"] .globe-dot__core,
+.globe-dot[data-state="ringing"] .globe-dot__core,
+.globe-dot[data-state="talking"] .globe-dot__core {
+  background: var(--color-signal);
+  transform: scale(1.4);
+}
+.globe-dot[data-state="ringing"] .globe-dot__core {
+  animation: dot-ring 1.4s var(--ease-out) infinite;
+}
+.globe-dot:active .globe-dot__core {
+  transform: scale(0.9);
+}
+@media (hover: hover) and (pointer: fine) {
+  .globe-dot:hover .globe-dot__core {
+    transform: scale(1.5);
+  }
+}
+@keyframes dot-ring {
+  from {
+    box-shadow: 0 0 0 2px var(--color-lacquer-900), 0 0 0 2px rgb(229 72 58 / 0.6);
+  }
+  to {
+    box-shadow: 0 0 0 2px var(--color-lacquer-900), 0 0 0 14px rgb(229 72 58 / 0);
+  }
 }
 
-.pulse-dot:hover {
-  transform: scale(1.3);
-}
-
-/* The user's own "you are here" pin — small, sized like the dots. */
-.pulse-me {
-  position: relative;
-  font-size: 18px;
-  line-height: 1;
-  cursor: default;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
-}
-
-.pulse-me-label {
+/* The dial's people track: the same marks, as real buttons (the keyboard path). */
+.dial-mark {
   position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 1px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 0 5px;
-  border-radius: 9999px;
-  white-space: nowrap;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+}
+.dial-mark:disabled {
+  cursor: default;
+}
+.dial-mark:focus-visible {
+  outline: 2px solid var(--color-opaline-50);
+  outline-offset: 1px;
+}
+.dial-mark__core {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--color-opaline-50);
+  transition:
+    transform 180ms var(--ease-out),
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.dial-mark[data-state="busy"] .dial-mark__core {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--color-opaline-200);
+}
+.dial-mark[data-state="selected"] .dial-mark__core {
+  transform: scale(1.6);
+}
+.dial-mark[data-state="calling"] .dial-mark__core,
+.dial-mark[data-state="ringing"] .dial-mark__core,
+.dial-mark[data-state="talking"] .dial-mark__core {
+  background: var(--color-signal);
+  transform: scale(1.5);
+}
+.dial-mark[data-state="ringing"] .dial-mark__core {
+  animation: dot-ring 1.4s var(--ease-out) infinite;
+}
+.dial-mark:active .dial-mark__core {
+  transform: scale(0.9);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dial-mark:not(:disabled):hover .dial-mark__core {
+    transform: scale(1.6);
+  }
+}
+.dial-mark--reveal {
+  animation: mark-in 380ms var(--ease-out) both;
+}
+@keyframes mark-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
 }
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+/* Waits develop: the 30-second window, swept by a red hand. */
+.dial-countdown {
+  fill: none;
+  stroke: var(--color-signal);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.55;
+  animation: dial-draw 30s linear forwards;
+}
+.dial-sweep {
+  transform-box: view-box;
+  animation: dial-sweep 30s linear forwards;
+}
+@keyframes dial-sweep {
+  to {
+    transform: rotate(360deg);
   }
-  70% {
-    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+}
+
+/* The call arc: the one authored moment. */
+.dial-arc {
+  fill: none;
+  stroke: var(--color-signal);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.dial-arc--dotted {
+  stroke-dasharray: 0.004 0.016;
+}
+.dial-arc--solid {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: dial-draw 700ms var(--ease-in-out) forwards;
+}
+@keyframes dial-draw {
+  to {
+    stroke-dashoffset: 0;
   }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dial-sweep,
+  .dial-countdown {
+    display: none; /* a frozen sweep would misreport the time left */
   }
+  .dial-arc--solid {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* You: the public spot plus a halo that holds your real location (1–3 km). */
+.globe-me {
+  --halo: 56px;
+  position: relative;
+  width: var(--halo);
+  height: var(--halo);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.globe-me__halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1.5px dashed rgb(243 245 248 / 0.5);
+}
+.globe-me__core {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-opaline-50);
+  box-shadow: 0 0 0 3px var(--color-lacquer-900);
 }

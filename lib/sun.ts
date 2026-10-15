@@ -154,10 +154,15 @@ export function distanceKm(a: LatLng, b: LatLng): number {
 
 export type PartOfDay = "night" | "dawn" | "morning" | "afternoon" | "evening" | "dusk";
 
-/** How someone's day looks right now, from their sun-time and sun height. */
-export function partOfDay(place: LatLng, date: Date): PartOfDay {
+/**
+ * How someone's day looks right now. Darkness comes from the real sun at
+ * their dot; morning/afternoon/evening follow the clock they actually see
+ * (`clock`, minutes after midnight) so "12:25" never reads as "morning".
+ * Without a known clock, their sun-time stands in.
+ */
+export function partOfDay(place: LatLng, date: Date, clock?: number): PartOfDay {
   const altitude = sunAltitude(place, date);
-  const hour = solarMinutes(place.lng, date) / 60;
+  const hour = (clock ?? solarMinutes(place.lng, date)) / 60;
   if (altitude < -6) return "night";
   if (altitude < 0) return hour < 12 ? "dawn" : "dusk";
   if (hour < 12) return "morning";

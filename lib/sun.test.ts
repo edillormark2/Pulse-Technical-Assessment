@@ -86,6 +86,14 @@ test("distance Manila to San Francisco is about 11,200 km", () => {
   near(distanceKm(manila, sanFrancisco), 11_200, 150);
 });
 
+test("part of day follows the person's own clock when known", () => {
+  // Sydney in daylight saving: the sun says ~11:30 but clocks say 12:25.
+  const sydney = { lat: -33.87, lng: 151.21 };
+  const when = new Date("2026-10-15T01:25:00Z");
+  assert.equal(partOfDay(sydney, when, clockMinutes(660, when)), "afternoon");
+  assert.equal(partOfDay(sydney, when), "morning"); // sun-time fallback
+});
+
 test("part of day", () => {
   assert.equal(partOfDay(manila, new Date("2026-03-20T15:56:00Z")), "night");
   assert.equal(partOfDay(manila, new Date("2026-03-20T01:00:00Z")), "morning");
