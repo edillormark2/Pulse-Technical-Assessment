@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { join, leave, poll, sendSignal } from "@/lib/api";
 import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
 import { POLL_INTERVAL_MS } from "@/lib/presence";
-import type { PeerDot, PollResponse, SignalMsg } from "@/lib/types";
+import type { PeerDot, PollResponse, PublicSelf, SignalMsg } from "@/lib/types";
 
 export type Conn =
   | { kind: "idle" }
@@ -38,9 +38,12 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  // Raw position: kept on this device only, to rejoin after being reaped.
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(
     null,
   );
+  // Public position: the privacy-offset spot everyone else sees.
+  const [me, setMe] = useState<PublicSelf | null>(null);
 
   const [conn, _setConn] = useState<Conn>({ kind: "idle" });
   const connRef = useRef<Conn>(conn);
@@ -372,7 +375,8 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
           // Our row is gone: reaped after a throttled background tab missed
           // heartbeats, or deleted by the pagehide beacon before a bfcache
           // restore. Nobody can see us until we join again.
-          await join(sessionId, myLocation.lat, myLocation.lng);
+          const self = await join(sessionId, myLocation.lat, myLocation.lng);
+          if (active) setMe(self);
         }
         handlePollRef.current(data);
       } catch {}
@@ -399,16 +403,18 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     return () => window.removeEventListener("pagehide", onLeave);
   }, [sessionId, phase]);
 
+  /** Join the map. Rejects when the server can't be reached. */
   async function enter(lat: number, lng: number) {
+    const self = await join(sessionId, lat, lng);
     setMyLocation({ lat, lng });
-    await join(sessionId, lat, lng);
+    setMe(self);
     setPhase("live");
   }
 
   return {
     phase,
     peers,
-    me: myLocation,
+    me,
     conn,
     video,
     messages,

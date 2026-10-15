@@ -16,6 +16,9 @@ model Presence {
   lat      Float // ALREADY privacy-offset coords (raw is never stored)
   lng      Float
   busy     Boolean  @default(false) // true while in an active connection
+  // The owner's own clock offset from UTC in minutes (e.g. 480 for UTC+8), so
+  // others can read their local hour. Coarser than the dot it belongs to.
+  utcOffset Int?
   lastSeen DateTime
 
   @@index([lastSeen])

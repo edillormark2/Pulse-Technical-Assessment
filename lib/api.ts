@@ -1,16 +1,26 @@
 // Client-side helpers for talking to the coordination API.
-import type { PollResponse, SignalType } from "@/lib/types";
+import type { PollResponse, PublicSelf, SignalType } from "@/lib/types";
 
+/** This device's clock offset in minutes east of UTC (e.g. 480 for UTC+8). */
+export function localUtcOffset(): number {
+  return -new Date().getTimezoneOffset();
+}
+
+/** Join (or rejoin) the map. Resolves to where everyone else will see you. */
 export async function join(
   id: string,
   lat: number,
   lng: number,
-): Promise<void> {
-  await fetch("/api/join", {
+): Promise<PublicSelf> {
+  const utcOffset = localUtcOffset();
+  const res = await fetch("/api/join", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, lat, lng }),
+    body: JSON.stringify({ id, lat, lng, utcOffset }),
   });
+  if (!res.ok) throw new Error(`join failed: ${res.status}`);
+  const body = (await res.json()) as { lat: number; lng: number };
+  return { lat: body.lat, lng: body.lng, utcOffset };
 }
 
 export async function poll(id: string): Promise<PollResponse> {

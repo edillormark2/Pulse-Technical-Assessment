@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       id: { not: id },
       lastSeen: { gte: staleCutoff },
     },
-    select: { id: true, lat: true, lng: true, busy: true },
+    select: { id: true, lat: true, lng: true, busy: true, utcOffset: true },
   });
 
   // 4) Drain this user's mailbox: read, then delete exactly what we read so a
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       lat: p.lat,
       lng: p.lng,
       busy: p.busy,
+      utcOffset: p.utcOffset,
     })),
     signals: inbox.map((s) => ({
       id: s.id,

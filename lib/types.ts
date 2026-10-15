@@ -15,6 +15,15 @@ export interface PeerDot {
   lat: number;
   lng: number;
   busy: boolean;
+  // Minutes east of UTC on the person's own clock; null if they didn't share it.
+  utcOffset: number | null;
+}
+
+/** Where you appear to everyone else (already privacy-offset), and your clock. */
+export interface PublicSelf {
+  lat: number;
+  lng: number;
+  utcOffset: number;
 }
 
 export interface SignalMsg {
