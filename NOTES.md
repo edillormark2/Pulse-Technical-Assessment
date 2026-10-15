@@ -202,3 +202,85 @@ rows carry no token; anyone online simply rejoins.
   hashing.
 - The full two-person flow (desktop and phone, headless Chromium) on a production build:
   entry, call, chat, video and goodbye, with zero CSP violations.
+
+## Phase 4 — Make it better: Daybreak
+
+### What I built
+
+Somewhere on Earth the sun is always a few minutes from rising. **Daybreak** marks the
+strangers whose sunrise is less than half an hour away, and lets you watch it come up
+with them on a call.
+
+- **On the map.** A person at daybreak keeps their usual mark, set on a horizon: a short
+  line either side of the dot. It shows on the dial, the globe and the legend, and the
+  header counts them ("· 2 at daybreak").
+- **Asking.** Their card counts down to their sunrise ("Their sun rises in 4:12", to the
+  second in the last ten minutes). The one action becomes **Watch their sunrise**.
+- **Being asked.** The other person sees "Someone wants to watch your sunrise" and their
+  own countdown. The browser tab says the same.
+- **Together.** The call opens a sky strip: the countdown, their horizon, the sun's real
+  path over the hour around sunrise (solid where it has been, dotted where it is going)
+  and their local sunrise time. The sun touches the line at the second it rises for
+  them: the horizon brightens, the sun fills in, and screen readers hear "Their sun is
+  up." **Ask to see it** asks to turn on video, so you can watch it through their
+  camera. On video, the countdown stays in the corner with their hour. Once a sunrise
+  shows in a call, it stays until the call ends.
+
+### Why this
+
+- **Alive.** Pulse already knows who is awake and what time it is for them. Daybreak
+  turns that into something happening to a real person right now, on a clock you can
+  watch. The globe's night band shows the sunrise line sweeping west; Daybreak is that
+  line made personal.
+- **A reason to talk.** Strangers struggle with the first sentence. "Can I watch your
+  sunrise?" is specific and kind, it ends on its own, and the sun gives both of you
+  something to look at besides each other.
+- **Safer by being specific.** The ask says what it is for. Each side checks it against
+  the real sun on their own device, so a stranger can't fake an excuse to call.
+
+### How it works
+
+- **The sun, computed.** Sunrise is when the sun's upper edge clears the horizon, at
+  −0.833° (refraction plus the sun's radius). It uses the same solar model as the night
+  band: step a minute at a time, then bisect to the second. There's no API and no new
+  data. Daybreak runs from 30 minutes before sunrise to 10 minutes after: enough time to
+  ask, connect and settle in, plus the best of the light after.
+- **Cheap.** The sun's altitude changes by at most about ¼° a minute. A dot far from the
+  horizon therefore skips the search, so a full map costs almost nothing to update.
+- **One grammar.** Daybreak is a modifier, not a new state. A busy person or your own
+  call can also be at daybreak, and the state marks keep their meaning.
+- **The ask carries an intent.** A request may carry exactly `{"intent":"sunrise"}`, byte
+  for byte. Anything else is refused with a 400, and the server stores nothing new. The
+  person asked only sees the sunrise heading if their own sun is really rising.
+  Everything else is unchanged: asking is still a request, and video is still a separate
+  yes.
+- **Whose sunrise.** A call is about their sunrise if it's near, otherwise yours, so both
+  ends watch the same one. Times are shown on the clock of the person whose sun it is.
+
+### How I checked it
+
+- `npm test` (26 unit tests):
+  - sunrise matches published times (San Francisco, Manila) within 2 minutes;
+  - at the sunrise found, the sun's edge sits on the horizon and is climbing;
+  - polar night and the midnight sun have no sunrise;
+  - the window edges are right;
+  - a sweep of 5,760 instants (the equator to the Arctic, both solstices and an
+    equinox) shows the fast path never misses a daybreak.
+- `npm run test:security` (42 checks, up from 39): the sunrise ask is delivered exactly,
+  and made-up or padded intents are refused.
+- End to end against the real sun. I solved for the point in western Ireland where the
+  sun would rise two and a half minutes later, and put a phone session ("Bob") there. A
+  desktop session in Manila found his dawn mark and asked to watch. They talked, turned
+  on video, and watched his sun reach the horizon at 07:04:56 UTC on both screens.
+  Every state was captured, with no CSP violations. This run also caught a real bug:
+  the chart drew the sun by its centre, so it sat on the horizon two minutes early. It
+  now rises by its top edge, as sunrise is defined.
+
+### Next, with more time
+
+- **Follow the sunrise.** Hop west along the sunrise line to a new stranger every few
+  minutes, and stay in the morning for an hour.
+- **Nightfall**, the same idea at sunset, and a gentle "remind me" for when a person's
+  daybreak starts.
+- **A relay (TURN)** before video becomes a main feature, so peers stop learning each
+  other's IP addresses (see Phase 3).

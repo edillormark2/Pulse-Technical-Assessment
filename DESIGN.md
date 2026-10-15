@@ -360,8 +360,8 @@ Calm, round, and one per decision.
 - **Border:** none on the panel itself.
 - **Internal Padding:** 24px; the chat sets its own (20px above a 24px-inset header, 16px either side of the messages, 12px around the composer).
 - **One at a time:** the state of the conversation chooses the panel: the stranger you picked, asking or connecting, someone asking you, the chat, the goodbye.
-- **Anatomy:** a state line (the state's mark, then the state in 15px words, as the panel's heading); the billed hour with its day word; the gap between you in 15px tabular day opaline ("9 hours ahead · about 11,200 km"); one primary action; at most one line of 13px fine print. In the chat, where the hour is billed in red, the mark moves under it beside their day word.
-- **Strips:** a prompt that belongs to the conversation (asking to turn on video, being asked) is a full-width strip of the panel between 1px night-enamel hairlines: no fill, no radius, 24px side padding, 12px above and below, 14px copy, then a pair of 40px buttons (quiet, primary) or a 14px medium underlined text action. A prompt inside a panel is never a card of its own.
+- **Anatomy:** a state line (the state's mark, then the state in 15px words, as the panel's heading); the billed hour with its day word; the gap between you in 15px tabular day opaline ("9 hours ahead · about 11,200 km"); at daybreak, the sunrise line (the daybreak mark, then "Their sun rises in 4:12" in 15px opaline with the countdown in 17px Archivo, to the second in the last ten minutes); one primary action; at most one line of 13px fine print. In the chat, where the hour is billed in red, the mark moves under it beside their day word.
+- **Strips:** a prompt that belongs to the conversation (the sky at daybreak, asking to turn on video, being asked) is a full-width strip of the panel between 1px night-enamel hairlines: no fill, no radius, 24px side padding, 12px above and below, 14px copy, then a pair of 40px buttons (quiet, primary) or a 14px medium underlined text action. A prompt inside a panel is never a card of its own.
 - **Not panels:** the entry copy and the idle note sit directly on the ground, 320 to 360px wide.
 
 ### Inputs / Fields
@@ -370,10 +370,10 @@ Calm, round, and one per decision.
 - **Send:** a 48px circle beside the field: primary when there is something to send, resting in raised lacquer with a muted-opaline icon when there is not. It never fades out.
 
 ### Header
-- The only chrome: the wordmark, then "21:42 here · 16 people awake" (15px tabular day opaline; the count fades in once the first presence check lands), then "8 of them in the dark" (13px muted opaline). There is no navigation. Zoomed in, a 176px scrim of the ground at 92% falling to clear keeps it legible. Mapbox's required attribution is set in muted opaline on the ground at 72%, and on phones it moves to the header's third line, at the right.
+- The only chrome: the wordmark, then "21:42 here · 16 people awake" (15px tabular day opaline; the count fades in once the first presence check lands), then "8 of them in the dark" (13px muted opaline), ending "· 2 at daybreak" while anyone's sun is about to rise. There is no navigation. Zoomed in, a 176px scrim of the ground at 92% falling to clear keeps it legible. Mapbox's required attribution is set in muted opaline on the ground at 72%, and on phones it moves to the header's third line, at the right.
 
 ### Browser Tab
-- At rest the tab shows the app icon and "Pulse · strangers awake right now". While someone is asking, the title becomes "Someone wants to talk · Pulse" and the icon gains the asking-you mark, reduced to a signal-red dot at its top right and cut out with a 4-unit deep-lacquer keyline (the tick has no room at tab size). Both return to rest the moment the ask ends.
+- At rest the tab shows the app icon and "Pulse · strangers awake right now". While someone is asking, the title becomes "Someone wants to talk · Pulse" ("Someone wants to watch your sunrise · Pulse" when that is the ask) and the icon gains the asking-you mark, reduced to a signal-red dot at its top right and cut out with a 4-unit deep-lacquer keyline (the tick has no room at tab size). Both return to rest the moment the ask ends.
 
 ### State Marks (signature)
 A 9px dot whose form carries the state:
@@ -385,10 +385,11 @@ A 9px dot whose form carries the state:
 - **Your call, talking:** filled signal, ×1.45.
 - **Asking you:** filled signal at ×1.35, carrying a 2×5px tick above it (the head of the sweep hand counting their 30 seconds), breathing between ×1.15 and ×1.45 over 1.4s each way.
 - **Just left:** a 1.5px faint-opaline ring that shrinks to 60% and fades over 1.2s.
+- **Daybreak (a modifier):** any of the marks above set on a horizon: a 1.5px day-opaline line 5px long either side of the dot, broken around it, 7px out. Their sun rises within half an hour or rose in the last ten minutes.
 - **Where:** on the dial each mark is a 28px button; on the globe it is 10px with the ground keyline inside a 32px target; in the legend the marks hold still. Marks change over 180ms, and a press shrinks them to 0.9.
 - **You:** a 12px opaline core with a 3px ground keyline inside a dashed 1.5px halo (opaline at 50%) drawn to your real 1 to 3 km offset, never smaller than 40px.
 
-**The State Grammar Rule.** Free, busy, picked, your call (asking, connecting, talking), asking you, and just left each have exactly one mark, identical on the dial, the globe, the panels and the legend. A new state earns a new mark in this grammar or does not ship; nothing draws a person any other way.
+**The State Grammar Rule.** Free, busy, picked, your call (asking, connecting, talking), asking you, and just left each have exactly one mark, identical on the dial, the globe, the panels and the legend. A new state earns a new mark in this grammar or does not ship; nothing draws a person any other way. Daybreak is the one modifier: it sets any mark on a horizon without changing what the mark says.
 
 ### The Dial (signature)
 - **Bezel:** a 36px band (26px on phones), 14px (9px) outside the globe: night enamel all round, with the opaline day laid over 06 to 18 and widened just enough that the 06 and 18 figures sit wholly on the day.
@@ -409,12 +410,19 @@ A 9px dot whose form carries the state:
 
 **The Waits Develop Rule.** Every wait advances in stages you can watch: the sweep hand on the ring, named steps with ticks in the panel, button words that say what is happening, "Waiting for their camera…" on the video stage. Never a spinner, a skeleton or an indeterminate bar.
 
+### The Sky (Daybreak)
+- **Where:** a strip of the chat while a sunrise is near, under the sunrise line and its one text action ("Ask to see it", only when the sun is theirs). Once shown, it stays for the rest of the call.
+- **Drawing:** a 320×56 chart scaled to the strip's width, covering the half hour either side of sunrise. The sun's real path is a 1.5px line: solid day opaline where it has been, dotted faint opaline (1.5 on, 4 off) where it is going. The sun is a 4-unit circle with a 2px opaline ring, hollow in panel lacquer, gliding between once-a-second readings. The horizon is a 1.5px day-opaline line across the chart, drawn where the sun's top edge meets it at sunrise, as the astronomers define it. Above the line, a 6px tick marks the moment, with the time on the sun owner's clock to its left (11px tabular muted opaline).
+- **The moment:** the sun stays wholly below the line until the second it rises. Then it touches the line and fills over 600ms, the horizon brightens to primary opaline at 2px, and it climbs through. The line says "Their sun is up", and screen readers hear it once.
+
+**The Horizon Rule.** Daybreak is drawn in the day's own opaline, never in red, orange or a gradient: the sun is not the live connection, and the moment is the sun crossing a line, not a glow.
+
 ### Messages
 - **Bubbles:** up to 82% of the panel's width, 10px by 14px padding, 18px corners with a 6px tail on the speaker's side, 15px at 1.4. Yours are opaline with night-lacquer text, on the right; theirs are raised lacquer with opaline text, on the left. A run from one speaker sits 6px apart, 12px between speakers. A new message rises 6px and fades in over 200ms.
 - **Goodbye:** the conversation holds where it stood for a beat, then each bubble blurs 6px, rises and fades over 1s, newest first and 35ms apart, under "Conversation ended" and "Nothing was kept.", set at the chat header's height so nothing moves.
 
 ### Video Stage
-- It covers the dial's side: everything left of the column on desktop, the whole screen on phones. Their hour stays in a 16px tile at the top left (night lacquer at 80%, a 28px signal numeral, a 12px day word): you are still on the dial. Your self-view is a mirrored 4:3 tile (144px; 208px from 640px) with the float shadow, and the 56px round controls sit centred at the foot.
+- It covers the dial's side: everything left of the column on desktop, the whole screen on phones. Their hour stays in a 16px tile at the top left (night lacquer at 80%, a 28px signal numeral, a 12px day word, and at daybreak the sunrise line at 13px): you are still on the dial. Your self-view is a mirrored 4:3 tile (144px; 208px from 640px) with the float shadow, and the 56px round controls sit centred at the foot.
 
 ### Toasts
 - Pill, raised lacquer, 15px opaline text, the float shadow, 20px from the top: at the right on desktop and centred on phones, where the conversation is.
@@ -435,6 +443,7 @@ A 9px dot whose form carries the state:
 - **Do** keep reduced motion to opacity: remove the sweep, show the arc already drawn, make camera moves instant.
 
 ### Don't:
+- **Don't** colour a sunrise: Daybreak is opaline lines and the sun's own path, with no warm hues, no gradients and no glow.
 - **Don't** use signal red for errors, warnings, counts or emphasis; an error is opaline text beside a drawn warning icon.
 - **Don't** set signal red at body size; it holds 3.9:1 on a panel, so it is for marks, strokes and numerals of 28px and up.
 - **Don't** add glow, glass or gradient text: no backdrop blur, no atmosphere halo or star field on the globe, no luminous dots.
