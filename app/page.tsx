@@ -124,6 +124,9 @@ export default function Home() {
     switch (ctrl) {
       case "video-request":
         if (videoRef.current === "none") setVideo("incoming");
+        // We both asked at once; each side used to ignore the other's request
+        // and wait forever. Treat theirs as the answer to ours.
+        else if (videoRef.current === "requesting") acceptVideo();
         break;
       case "video-accept":
         if (videoRef.current === "requesting" && ps) {
@@ -176,12 +179,16 @@ export default function Home() {
     teardown();
   }
 
-  function acceptIncoming() {
-    if (connRef.current.kind !== "incoming") return;
-    const peerId = connRef.current.peerId;
+  // Become the callee for `peerId`: get ready for their offer, then accept.
+  function acceptFrom(peerId: string) {
     startPeer(peerId, false);
     void sendSignal(sessionId, peerId, "accept");
     setConn({ kind: "connecting", peerId });
+  }
+
+  function acceptIncoming() {
+    if (connRef.current.kind !== "incoming") return;
+    acceptFrom(connRef.current.peerId);
   }
 
   function declineIncoming() {
@@ -237,8 +244,17 @@ export default function Home() {
   function processSignal(sig: SignalMsg) {
     switch (sig.type) {
       case "request": {
-        if (connRef.current.kind === "idle") {
+        const c = connRef.current;
+        if (c.kind === "idle") {
           setConn({ kind: "incoming", peerId: sig.fromId });
+        } else if (c.kind === "requesting" && c.peerId === sig.fromId) {
+          // We tapped each other at the same moment. Declining both requests
+          // would turn away two people who both want to talk, so exactly one
+          // side (the smaller id) accepts and the other waits for that accept.
+          if (sessionId < sig.fromId) {
+            if (requestTimer.current) clearTimeout(requestTimer.current);
+            acceptFrom(sig.fromId);
+          }
         } else {
           void sendSignal(sessionId, sig.fromId, "decline");
         }
