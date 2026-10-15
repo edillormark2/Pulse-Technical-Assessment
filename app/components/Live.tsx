@@ -301,7 +301,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           </p>
           {peers.length > 0 && (
             <p className="tabular mt-1 text-[13px] text-opaline-400">
-              {awakeInDark === 0 ? "Nobody else is in the dark right now" : `${awakeInDark} of them in the dark`}
+              {awakeInDark === 0 ? "Nobody else is in the dark" : `${awakeInDark} of them in the dark`}
             </p>
           )}
         </header>
