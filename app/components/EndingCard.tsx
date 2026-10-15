@@ -22,7 +22,7 @@ export default function EndingCard({ messages, className }: { messages: ChatMess
   return (
     <section className={clsx("card flex w-full flex-col overflow-hidden p-0", className)} aria-labelledby="ending-title">
       {/* As tall as the chat's header, so the messages don't move. */}
-      <header className="min-h-[106px] px-6 pb-4 pt-5">
+      <header className="min-h-[110px] px-6 pb-4 pt-5 md:min-h-[131px]">
         <h2 id="ending-title" className="fade-in text-[17px] text-opaline-50">
           Conversation ended
         </h2>

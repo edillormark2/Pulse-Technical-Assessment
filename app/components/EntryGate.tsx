@@ -66,7 +66,7 @@ export default function EntryGate({ onReady }: { onReady: (lat: number, lng: num
   const busy = status === "locating" || status === "joining";
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-lacquer-950">
+    <main className="fixed inset-0 overflow-hidden bg-lacquer-900">
       {hydrated && (
         <>
           <HourFace center={layout.center} radius={layout.globeRadius} minutes={minutes} className="hour-face--enter" />
@@ -84,7 +84,7 @@ export default function EntryGate({ onReady }: { onReady: (lat: number, lng: num
         </>
       )}
 
-      <header className="pointer-events-none absolute left-0 top-0 p-5 sm:p-8">
+      <header className="pointer-events-none absolute left-0 top-0 p-5 pt-[max(20px,env(safe-area-inset-top))] sm:p-8">
         <h1 className="numeral text-[34px] leading-none sm:text-[44px]">Pulse</h1>
         {hydrated && <p className="tabular fade-in mt-2 text-[15px] text-opaline-200">{formatClock(minutes)} here</p>}
       </header>

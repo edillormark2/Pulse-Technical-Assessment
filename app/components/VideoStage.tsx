@@ -51,7 +51,7 @@ export default function VideoStage({
   useStream(localRef, localStream);
 
   return (
-    <section className="video-stage absolute inset-y-0 left-0 overflow-hidden bg-lacquer-950" style={style} aria-label="Video call">
+    <section className="video-stage absolute inset-y-0 left-0 overflow-hidden bg-lacquer-900" style={style} aria-label="Video call">
       <video ref={remoteRef} autoPlay playsInline className="h-full w-full object-cover" />
       {!remoteStream && (
         <p className="absolute inset-0 grid place-items-center text-[15px] text-opaline-400" role="status">

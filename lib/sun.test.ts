@@ -112,3 +112,14 @@ test("part of day from the clock alone, before a location is known", () => {
   assert.equal(at(20, 59), "evening");
   assert.equal(at(21), "night");
 });
+
+test("both ends of a call name the same hour the same way", () => {
+  // San Francisco in October: dark by 19:40, but by the clock it is still evening.
+  const sf = { lat: 37.77, lng: -122.42 };
+  const evening = new Date("2026-10-16T02:40:00Z"); // 19:40 PDT
+  assert.equal(partOfDay(sf, evening, clockMinutes(-420, evening)), "evening");
+  assert.equal(partOfDay(sf, evening, clockMinutes(-420, evening)), partOfClock(clockMinutes(-420, evening)));
+  // Just after sunset the sun adds dusk.
+  const dusk = new Date("2026-10-16T01:50:00Z"); // 18:50 PDT
+  assert.equal(partOfDay(sf, dusk, clockMinutes(-420, dusk)), "dusk");
+});

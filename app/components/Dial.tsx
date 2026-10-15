@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import clsx from "clsx";
 import type { MarkState } from "./Globe";
+import { DIAL } from "@/lib/use-dial-layout";
 
 /** A person as the dial sees them: an hour, a state, a description. */
 export interface DialPerson {
@@ -36,6 +37,15 @@ function arc(c: number, r: number, a0: number, a1: number, ccw = false): string 
   const [x0, y0] = polar(c, r, a0);
   const [x1, y1] = polar(c, r, ccw ? a0 - sweep : a0 + sweep);
   return `M${x0} ${y0}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} ${ccw ? 0 : 1} ${x1} ${y1}`;
+}
+
+/** A pie slice from the centre, clockwise from a0 to a1: clips ink to the day or the night. */
+function sector(c: number, r: number, a0: number, a1: number): string {
+  let sweep = (a1 - a0) % 360;
+  if (sweep < 0) sweep += 360;
+  const [x0, y0] = polar(c, r, a0);
+  const [x1, y1] = polar(c, r, a0 + sweep);
+  return `M${c} ${c}L${x0} ${y0}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${x1} ${y1}Z`;
 }
 
 /**
@@ -84,25 +94,32 @@ export default function Dial({
   people: DialPerson[];
   live: DialLive | null;
   compact: boolean;
-  /** Turn the ring into place as it first appears (the entry screen). */
+  /** Light the hours up as the ring first appears (the entry screen). */
   reveal?: boolean;
   onSelect: (id: string) => void;
 }) {
-  const track = globeRadius + (compact ? 11 : 13); // people
-  const r1 = globeRadius + (compact ? 22 : 26); // band inner edge
-  const r2 = r1 + (compact ? 16 : 22); // band outer edge
-  const numerals = r2 + (compact ? 11 : 14);
-  const size = Math.ceil(2 * (numerals + 16));
+  const g = compact ? DIAL.compact : DIAL.desktop;
+  const r1 = globeRadius + g.gap; // band inner edge
+  const r2 = r1 + g.band; // band outer edge
+  const arcR = r2 + g.arc; // the call arc, the countdown and the sweep's tip
+  const track = r2 + g.track; // people, at their hour
+  const size = Math.ceil(2 * (track + g.margin));
   const c = size / 2;
   const bandMid = (r1 + r2) / 2;
-  const bandWidth = r2 - r1;
+  const clip = useId().replace(/[^a-zA-Z0-9]/g, "");
 
-  // The day/night band turns once a day; you stay at the top.
+  // The band turns once a day; you stay at the top.
   const hourAngle = (hour: number) => angleOf(hour * 60 - myMinutes);
+  // Day runs 06 to 18, widened just enough that both figures sit wholly on
+  // the opaline instead of straddling its edge.
+  const dayPad = ((g.figure * 0.62) / bandMid) * (180 / Math.PI);
+  const dawn = hourAngle(6) - dayPad;
+  const dusk = hourAngle(18) + dayPad;
   // On arrival the hours light up clockwise from yours, 25 ms apart.
   const revealDelay = (hour: number) =>
     reveal ? { animationDelay: `${300 + Math.floor((((hour * 60 - myMinutes) / 60) % 24 + 24) % 24) * 25}ms` } : undefined;
-  const { placed, overflow } = layout(people, compact ? 4.6 : 3.4);
+  // People who share an hour fan out about a mark's width apart.
+  const { placed, overflow } = layout(people, (compact ? 13 : 16) / track / DEG);
 
   // Measured reveal: people present when you arrive appear in hour order from
   // yours outward, once. Anyone joining later simply fades in.
@@ -113,11 +130,12 @@ export default function Dial({
   }, []);
 
   // The call arc always starts at your hour and runs the short way to theirs:
-  // clockwise to people ahead of you, anticlockwise to people behind.
+  // clockwise to people ahead of you, anticlockwise to people behind. It only
+  // exists once they said yes: dotted while the line opens, solid once you talk.
   const liveMark = live ? placed.find((p) => p.person.id === live.id) : undefined;
   const callArc =
-    live && liveMark && live.phase !== "calling"
-      ? { d: arc(c, r2 + 4, -90, liveMark.angle, liveMark.angle < -90), talking: live.phase === "talking" }
+    live && liveMark && (live.phase === "connecting" || live.phase === "talking")
+      ? { d: arc(c, arcR, -90, liveMark.angle, liveMark.angle < -90), talking: live.phase === "talking" }
       : null;
 
   // On goodbye the arc pulls back into your hour instead of vanishing.
@@ -133,6 +151,9 @@ export default function Dial({
     return () => clearTimeout(t);
   }, [retracting]);
 
+  // Waits develop: asking and being asked both show the 30-second window.
+  const waiting = live && (live.phase === "calling" || live.phase === "ringing") ? live : null;
+
   if (!center) return null;
   return (
     <div
@@ -144,58 +165,81 @@ export default function Dial({
       style={{ left: center.x - c, top: center.y - c, width: size, height: size }}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="absolute inset-0">
-        {/* The 24-hour band: night all round, the day arc laid over it. */}
-        <circle cx={c} cy={c} r={bandMid} fill="none" stroke="var(--color-lacquer-700)" strokeWidth={bandWidth} />
-        <path d={arc(c, bandMid, hourAngle(6), hourAngle(18))} fill="none" stroke="var(--color-opaline-200)" strokeWidth={bandWidth} />
-        {Array.from({ length: 24 }, (_, h) => {
-          const a = hourAngle(h);
-          const day = h >= 6 && h < 18;
-          const [x0, y0] = polar(c, r1 + 2, a);
-          const [x1, y1] = polar(c, h % 6 === 0 ? r2 - 2 : r1 + (compact ? 5 : 7), a);
+        <defs>
+          <clipPath id={`${clip}day`}>
+            <path d={sector(c, r2 + 2, dawn, dusk)} />
+          </clipPath>
+          <clipPath id={`${clip}night`}>
+            <path d={sector(c, r2 + 2, dusk, dawn)} />
+          </clipPath>
+        </defs>
+
+        {/* The 24-hour band: enamel night all round, the opaline day laid over it. */}
+        <circle cx={c} cy={c} r={bandMid} fill="none" stroke="var(--color-lacquer-700)" strokeWidth={g.band} />
+        <path d={arc(c, bandMid, dawn, dusk)} fill="none" stroke="var(--color-opaline-200)" strokeWidth={g.band} />
+
+        {/* Engraved hours: a figure every third hour, a tick at the rim between.
+            The ink follows the enamel under it: dark on the day, light on the night. */}
+        {(["day", "night"] as const).map((side) => {
+          const ink = side === "day" ? "var(--color-lacquer-700)" : "var(--color-opaline-200)";
           return (
-            <line
-              key={h}
-              x1={x0}
-              y1={y0}
-              x2={x1}
-              y2={y1}
-              stroke={day ? "var(--color-lacquer-700)" : "var(--color-opaline-500)"}
-              strokeWidth={h % 6 === 0 ? 2 : 1.25}
-              strokeLinecap="round"
-              className={reveal ? "dial-hour-in" : undefined}
-              style={revealDelay(h)}
-            />
-          );
-        })}
-        {[0, 6, 12, 18].map((h) => {
-          const [x, y] = polar(c, numerals, hourAngle(h));
-          return (
-            <text
-              key={h}
-              x={x}
-              y={y}
-              dy="0.35em"
-              textAnchor="middle"
-              className={clsx("tabular font-display", reveal && "dial-hour-in")}
-              style={{ fontStretch: "75%", fontWeight: 600, fontSize: compact ? 11 : 13, ...revealDelay(h) }}
-              fill="var(--color-opaline-400)"
-            >
-              {String(h).padStart(2, "0")}
-            </text>
+            <g key={side} clipPath={`url(#${clip}${side})`}>
+              {Array.from({ length: 24 }, (_, h) => {
+                const a = hourAngle(h);
+                if (h % 3 === 0) {
+                  const [x, y] = polar(c, bandMid, a);
+                  return (
+                    <text
+                      key={h}
+                      x={x}
+                      y={y}
+                      dy="0.36em"
+                      textAnchor="middle"
+                      fill={ink}
+                      className={clsx("tabular font-display", reveal && "dial-hour-in")}
+                      style={{ fontStretch: "72%", fontWeight: 650, fontSize: g.figure, ...revealDelay(h) }}
+                    >
+                      {String(h).padStart(2, "0")}
+                    </text>
+                  );
+                }
+                const [x0, y0] = polar(c, r2 - 3, a);
+                const [x1, y1] = polar(c, r2 - (compact ? 7 : 9), a);
+                return (
+                  <line
+                    key={h}
+                    x1={x0}
+                    y1={y0}
+                    x2={x1}
+                    y2={y1}
+                    stroke={ink}
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    className={reveal ? "dial-hour-in" : undefined}
+                    style={revealDelay(h)}
+                  />
+                );
+              })}
+            </g>
           );
         })}
 
-        {/* You: a bright notch across the band at 12 o'clock. */}
-        <line x1={c} y1={c - r1 + 1} x2={c} y2={c - r2 - 4} stroke="var(--color-opaline-50)" strokeWidth={3} strokeLinecap="round" />
-        <path d={`M${c - 5} ${c - r1 + 8}L${c + 5} ${c - r1 + 8}L${c} ${c - r1 + 2}Z`} fill="var(--color-opaline-50)" />
+        {/* You: an index across the band at 12 o'clock, outlined so it reads on
+            the day and the night side alike. */}
+        <line x1={c} y1={c - r1 + 3} x2={c} y2={c - r2 - 4} stroke="var(--color-lacquer-900)" strokeWidth={6} strokeLinecap="round" />
+        <line x1={c} y1={c - r1 + 3} x2={c} y2={c - r2 - 4} stroke="var(--color-opaline-50)" strokeWidth={2.5} strokeLinecap="round" />
+        <path
+          d={`M${c - 5} ${c - r1 + Math.min(10, g.gap)}L${c + 5} ${c - r1 + Math.min(10, g.gap)}L${c} ${c - r1 + 3}Z`}
+          fill="var(--color-opaline-50)"
+        />
 
-        {/* Waits develop: while asking, a red hand sweeps the 30-second window. */}
-        {/* Mounted when the request goes out, so it runs in step with the 30 s timer. */}
-        {live?.phase === "calling" && (
-          <g key={`sweep-${live.id}`}>
-            <path d={arc(c, r2 + 4, -90, 269.9)} pathLength={1} className="dial-countdown" />
+        {/* Waits develop: a red hand sweeps the 30-second window, on both sides of
+            the ask. Mounted when the ask starts, so it runs in step with it. */}
+        {waiting && (
+          <g key={`sweep-${waiting.id}-${waiting.phase}`}>
+            <path d={arc(c, arcR, -90, 269.9)} pathLength={1} className="dial-countdown" />
             <g className="dial-sweep" style={{ transformOrigin: `${c}px ${c}px` }}>
-              <line x1={c} y1={c - r1 + 2} x2={c} y2={c - r2 - 6} stroke="var(--color-signal)" strokeWidth={2} strokeLinecap="round" />
+              <line x1={c} y1={c - r1 + 3} x2={c} y2={c - arcR - 3} stroke="var(--color-signal)" strokeWidth={2} strokeLinecap="round" />
             </g>
           </g>
         )}
@@ -214,20 +258,22 @@ export default function Dial({
         )}
       </svg>
 
-      {/* People: real buttons, clockwise from you, so the dial is also the list. */}
+      {/* People: real buttons outside the band, clockwise from you, so the dial
+          is also the list. Someone who just left keeps a fading mark a moment. */}
       {placed.length > 0 && (
         <ol aria-label="People online, by their local time" className="absolute inset-0 m-0 list-none p-0">
           {placed.map(({ person, angle }, i) => {
             const [x, y] = polar(c, track, angle);
+            const gone = person.state === "gone";
             return (
-              <li key={person.id}>
+              <li key={person.id} aria-hidden={gone || undefined}>
                 <button
                   type="button"
                   aria-label={person.label}
                   aria-pressed={person.state === "selected"}
-                  data-state={person.state}
                   onClick={() => onSelect(person.id)}
-                  disabled={!visible}
+                  disabled={!visible || gone}
+                  tabIndex={gone ? -1 : undefined}
                   className={clsx("dial-mark pointer-events-auto", revealNow && "dial-mark--reveal")}
                   style={{
                     left: x,
@@ -235,7 +281,7 @@ export default function Dial({
                     animationDelay: revealNow ? `${Math.min(i * 45, 600)}ms` : undefined,
                   }}
                 >
-                  <span className="dial-mark__core" />
+                  <span className="mark" data-state={person.state} />
                 </button>
               </li>
             );
@@ -243,7 +289,7 @@ export default function Dial({
         </ol>
       )}
       {overflow.map(({ angle, count }) => {
-        const [x, y] = polar(c, track - (compact ? 14 : 18), angle);
+        const [x, y] = polar(c, track + (compact ? 12 : 15), angle);
         return (
           <span
             key={angle}

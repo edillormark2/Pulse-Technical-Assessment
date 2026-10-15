@@ -113,18 +113,24 @@
     padding: 24px;
     box-shadow: var(--shadow-float);
   }
+  /* Panels grow out of the edge nearest the dial you tapped: their left on
+     desktop, their top on phones. Nothing slides in from nowhere. */
   .card-enter {
     transition:
       opacity 240ms var(--ease-out),
-      transform 240ms var(--ease-out),
-      filter 240ms var(--ease-out);
+      transform 280ms var(--ease-out);
   }
   @starting-style {
     .card-enter {
       opacity: 0;
-      transform: translateY(8px);
-      filter: blur(4px);
+      transform: scale(0.96);
     }
+  }
+  [data-panel="side"] .card-enter {
+    transform-origin: left center;
+  }
+  [data-panel="sheet"] .card-enter {
+    transform-origin: top center;
   }
 
   .btn {
@@ -212,22 +218,90 @@
     color: #fff;
   }
 
-  /* Steps of a wait: done, happening now, still to come (the state grammar). */
-  .stage-mark {
+  /* Steps of a wait, drawn like the dial's hour ticks so they never read as
+     people: done, developing now, still to come. */
+  .stage-tick {
+    width: 3px;
+    height: 14px;
+    flex: none;
+    border-radius: 2px;
+  }
+  .stage-tick--done {
+    background: var(--color-opaline-50);
+  }
+  .stage-tick--current {
+    background: var(--color-signal);
+    animation: tick-develop 1.1s var(--ease-in-out) infinite alternate;
+  }
+  .stage-tick--pending {
+    background: var(--color-lacquer-700);
+  }
+
+  /*
+   * One mark per state, identical on the dial, the globe and the panels.
+   * free = filled, busy = hollow, picked = grown. Your own call reads hollow
+   * red (asking), half red (connecting), full red (talking); someone asking
+   * you is red and pulsing; someone who just left fades out.
+   */
+  .mark {
+    display: block;
     width: 9px;
     height: 9px;
     flex: none;
     border-radius: 999px;
-  }
-  .stage-mark--done {
     background: var(--color-opaline-50);
+    box-shadow:
+      inset 0 0 0 var(--ring, 0) var(--ring-color, transparent),
+      0 0 0 var(--outline, 0) var(--color-lacquer-900);
+    transition:
+      transform 180ms var(--ease-out),
+      background-color 180ms ease,
+      box-shadow 180ms ease;
   }
-  .stage-mark--current {
+  .mark[data-state="busy"] {
+    background: transparent;
+    --ring: 2px;
+    --ring-color: var(--color-opaline-200);
+  }
+  .mark[data-state="selected"] {
+    transform: scale(1.6);
+  }
+  .mark[data-state="calling"] {
+    background: transparent;
+    --ring: 2px;
+    --ring-color: var(--color-signal);
+    transform: scale(1.45);
+  }
+  .mark[data-state="connecting"] {
+    background: linear-gradient(to top, var(--color-signal) 50%, transparent 50%);
+    --ring: 2px;
+    --ring-color: var(--color-signal);
+    transform: scale(1.45);
+  }
+  .mark[data-state="talking"] {
     background: var(--color-signal);
+    transform: scale(1.45);
+  }
+  .mark[data-state="ringing"] {
+    background: var(--color-signal);
+    transform: scale(1.45);
     animation: dot-ring 1.4s var(--ease-out) infinite;
   }
-  .stage-mark--pending {
-    box-shadow: inset 0 0 0 2px var(--color-lacquer-700);
+  .mark[data-state="gone"] {
+    background: transparent;
+    --ring: 1.5px;
+    --ring-color: var(--color-opaline-500);
+    animation: mark-gone 1200ms var(--ease-out) forwards;
+  }
+  /* In the legend the marks hold still. */
+  .mark.mark--static[data-state] {
+    animation: none;
+  }
+  /* On the globe, a dark outline lifts a mark off the land. */
+  .mark--on-map {
+    width: 10px;
+    height: 10px;
+    --outline: 2px;
   }
 
   /* Messages. Yours in opaline, theirs in lacquer; new ones rise in. */
@@ -311,37 +385,11 @@
     outline: 2px solid var(--color-opaline-50);
     outline-offset: 1px;
   }
-  .dial-mark__core {
-    width: 9px;
-    height: 9px;
-    border-radius: 999px;
-    background: var(--color-opaline-50);
-    transition:
-      transform 180ms var(--ease-out),
-      background-color 180ms ease,
-      box-shadow 180ms ease;
-  }
-  .dial-mark[data-state="busy"] .dial-mark__core {
-    background: transparent;
-    box-shadow: inset 0 0 0 2px var(--color-opaline-200);
-  }
-  .dial-mark[data-state="selected"] .dial-mark__core {
-    transform: scale(1.6);
-  }
-  .dial-mark[data-state="calling"] .dial-mark__core,
-  .dial-mark[data-state="ringing"] .dial-mark__core,
-  .dial-mark[data-state="talking"] .dial-mark__core {
-    background: var(--color-signal);
-    transform: scale(1.5);
-  }
-  .dial-mark[data-state="ringing"] .dial-mark__core {
-    animation: dot-ring 1.4s var(--ease-out) infinite;
-  }
-  .dial-mark:active .dial-mark__core {
+  .dial-mark:active .mark {
     transform: scale(0.9);
   }
   @media (hover: hover) and (pointer: fine) {
-    .dial-mark:not(:disabled):hover .dial-mark__core {
+    .dial-mark:not(:disabled):hover .mark {
       transform: scale(1.6);
     }
   }
@@ -451,6 +499,17 @@
     opacity: 0;
   }
 }
+@keyframes mark-gone {
+  to {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes tick-develop {
+  to {
+    opacity: 0.35;
+  }
+}
 @keyframes dissolve {
   0%,
   30% {
@@ -474,6 +533,17 @@
 .mapboxgl-ctrl-attrib a {
   color: var(--color-opaline-400) !important;
 }
+.mapboxgl-ctrl-attrib .mapboxgl-ctrl-attrib-button {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg' fill-rule='evenodd' fill='%23a3aec2'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");
+}
+.mapboxgl-ctrl-attrib .mapboxgl-ctrl-attrib-button:focus {
+  box-shadow: none;
+}
+.mapboxgl-ctrl-attrib .mapboxgl-ctrl-attrib-button:focus-visible {
+  outline: 2px solid var(--color-opaline-50);
+  outline-offset: 2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -486,11 +556,15 @@
 }
 
 /* On phones the panel rises from the bottom, so Mapbox's logo and attribution
-   move to the top-right beside the header, where nothing ever covers them. */
+   move up to the header's third line, in one row at the right, clear of the
+   wordmark and of every panel. */
 @media (max-width: 767.98px) {
   .mapboxgl-control-container > .mapboxgl-ctrl-bottom-right {
-    top: max(14px, env(safe-area-inset-top));
+    top: calc(max(20px, env(safe-area-inset-top)) + 64px);
     bottom: auto;
+  }
+  .mapboxgl-control-container > .mapboxgl-ctrl-bottom-right > .mapboxgl-ctrl {
+    clear: none;
   }
 }
 
@@ -511,40 +585,11 @@
   background: none;
   cursor: pointer;
 }
-.globe-dot__core {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--color-opaline-50);
-  box-shadow: 0 0 0 2px var(--color-lacquer-900);
-  transition:
-    transform 180ms var(--ease-out),
-    background-color 180ms ease,
-    box-shadow 180ms ease;
-}
-.globe-dot[data-state="busy"] .globe-dot__core {
-  background: transparent;
-  box-shadow:
-    inset 0 0 0 2px var(--color-opaline-200),
-    0 0 0 2px var(--color-lacquer-900);
-}
-.globe-dot[data-state="selected"] .globe-dot__core {
-  transform: scale(1.5);
-}
-.globe-dot[data-state="calling"] .globe-dot__core,
-.globe-dot[data-state="ringing"] .globe-dot__core,
-.globe-dot[data-state="talking"] .globe-dot__core {
-  background: var(--color-signal);
-  transform: scale(1.4);
-}
-.globe-dot[data-state="ringing"] .globe-dot__core {
-  animation: dot-ring 1.4s var(--ease-out) infinite;
-}
-.globe-dot:active .globe-dot__core {
+.globe-dot:active .mark {
   transform: scale(0.9);
 }
 @media (hover: hover) and (pointer: fine) {
-  .globe-dot:hover .globe-dot__core {
+  .globe-dot:hover .mark {
     transform: scale(1.5);
   }
 }

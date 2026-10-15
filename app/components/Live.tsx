@@ -13,6 +13,7 @@ import ChatCard from "./ChatCard";
 import EndingCard from "./EndingCard";
 import VideoStage from "./VideoStage";
 import HourFace from "./HourFace";
+import Legend from "./Legend";
 import type { usePulse } from "@/lib/use-pulse";
 import type { PeerDot, PublicSelf } from "@/lib/types";
 import { localUtcOffset } from "@/lib/api";
@@ -26,7 +27,7 @@ import {
   partOfDay,
 } from "@/lib/sun";
 import { DAY_WORDS, formatDistance, useNow } from "@/lib/use-world-clock";
-import { useDialLayout } from "@/lib/use-dial-layout";
+import { DIAL, dialExtent, useDialLayout } from "@/lib/use-dial-layout";
 
 type Pulse = ReturnType<typeof usePulse>;
 
@@ -38,6 +39,12 @@ export interface PersonView {
   dayWord: string;
   km: number;
 }
+
+/** How long someone who left keeps a fading mark (matches the CSS). */
+const GONE_MS = 1200;
+
+/** The desktop legend's corner box (bottom-left), for checking it clears the dial. */
+const LEGEND_BOX = { width: 150, height: 124, inset: 28 };
 
 /** How the dial describes the person you are in a conversation with. */
 const LIVE_LABEL: Record<DialLive["phase"], string> = {
@@ -74,6 +81,22 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const [focus, setFocus] = useState<{ lat: number; lng: number; key: string } | null>(null);
   const [rest, setRest] = useState(0);
 
+  // Someone who leaves keeps a fading mark for a moment, so nobody just blinks out.
+  const [lastPeers, setLastPeers] = useState(peers);
+  const [gone, setGone] = useState<PeerDot[]>([]);
+  if (peers !== lastPeers) {
+    const here = new Set(peers.map((p) => p.id));
+    const left = lastPeers.filter((p) => !here.has(p.id));
+    setLastPeers(peers);
+    if (left.length > 0) setGone((g) => [...g.filter((p) => !here.has(p.id)), ...left]);
+  }
+  useEffect(() => {
+    if (gone.length === 0) return;
+    const t = setTimeout(() => setGone([]), GONE_MS);
+    return () => clearTimeout(t);
+  }, [gone]);
+  const goneNow = gone.filter((g) => !peers.some((p) => p.id === g.id));
+
   const me: PublicSelf = pulse.me ?? { lat: 0, lng: 0, utcOffset: localUtcOffset() };
   const myMinutes = clockMinutes(me.utcOffset, now);
   const people = peers.map((p) => describe(p, me, now));
@@ -91,15 +114,14 @@ export default function Live({ pulse }: { pulse: Pulse }) {
             ? "talking"
             : null;
 
-  // One mark per state, shared by the globe and the dial.
+  // One mark per state, shared by the globe, the dial and the panel.
   const marks: Record<string, MarkState> = {};
   if (selectedId) marks[selectedId] = "selected";
-  if (liveId && livePhase) {
-    marks[liveId] = livePhase === "connecting" ? "talking" : livePhase;
-  }
+  if (liveId && livePhase) marks[liveId] = livePhase;
+  for (const g of goneNow) marks[g.id] = "gone";
   const stateOf = (p: PeerDot): MarkState => marks[p.id] ?? (p.busy ? "busy" : "free");
 
-  const dialPeople: DialPerson[] = people.map((v) => ({
+  const dialPeople: DialPerson[] = [...people, ...goneNow.map((p) => describe(p, me, now))].map((v) => ({
     id: v.peer.id,
     deltaMinutes: Math.round(v.hoursApart * 60),
     state: stateOf(v.peer),
@@ -113,6 +135,14 @@ export default function Live({ pulse }: { pulse: Pulse }) {
 
   // Until the globe reports in, the ring stays where the entry screen drew it.
   const dialFits = view === null || view.radius <= layout.globeRadius * 1.08;
+
+  // On desktop the legend has the bottom-left corner when the dial leaves it free.
+  const legendFits =
+    !layout.compact &&
+    Math.hypot(
+      LEGEND_BOX.inset + LEGEND_BOX.width - layout.center.x,
+      layout.center.y - LEGEND_BOX.inset - LEGEND_BOX.height,
+    ) > layout.globeRadius + dialExtent(DIAL.desktop);
 
   function select(id: string | null, fromDial = false) {
     if (conn.kind !== "idle") return; // the live call owns the panel
@@ -184,6 +214,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
       <IdleNote
         others={pulse.synced ? peers.length : null}
         compact={layout.compact}
+        withLegend={!legendFits}
         className={clsx("transition-opacity duration-300", !dialFits && "pointer-events-none opacity-0")}
       />
     );
@@ -191,14 +222,14 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const idle = !pulse.ending && conn.kind === "idle" && !selected;
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-lacquer-950">
+    <main className="fixed inset-0 overflow-hidden bg-lacquer-900">
       {/* The world, out of reach while a video covers it. */}
       <div className="absolute inset-0" inert={videoActive}>
         <Globe
-          peers={peers}
+          peers={goneNow.length > 0 ? [...peers, ...goneNow] : peers}
           me={pulse.me}
           marks={marks}
-          live={livePerson ? { lat: livePerson.peer.lat, lng: livePerson.peer.lng, talking: conn.kind === "connected" } : null}
+          recede={conn.kind === "connected"}
           focus={focus}
           rest={rest}
           dialRadius={layout.globeRadius}
@@ -228,11 +259,11 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         <div
           aria-hidden="true"
           className={clsx(
-            "pointer-events-none absolute inset-x-0 top-0 h-44 bg-[linear-gradient(to_bottom,rgb(10_20_40/0.92),rgb(10_20_40/0))] transition-opacity duration-300",
+            "pointer-events-none absolute inset-x-0 top-0 h-44 bg-[linear-gradient(to_bottom,rgb(15_27_51/0.92),rgb(15_27_51/0))] transition-opacity duration-300",
             dialFits ? "opacity-0" : "opacity-100",
           )}
         />
-        <header className="pointer-events-none absolute left-0 top-0 p-5 sm:p-8">
+        <header className="pointer-events-none absolute left-0 top-0 p-5 pt-[max(20px,env(safe-area-inset-top))] sm:p-8">
           <h1 className="numeral text-[34px] leading-none sm:text-[44px]">Pulse</h1>
           <p className="tabular mt-2 text-[15px] text-opaline-200">
             {formatClock(myMinutes)} here
@@ -250,13 +281,23 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           )}
         </header>
 
+        {/* The state legend keeps its corner while the dial is at rest; zoomed in,
+            the way back to the dial takes the same spot. */}
+        {legendFits && (
+          <Legend
+            className={clsx(
+              "absolute bottom-7 left-7 transition-opacity duration-300",
+              !dialFits && "pointer-events-none opacity-0",
+            )}
+          />
+        )}
         {view && !dialFits && (
           <button
             type="button"
             className={clsx(
               "btn btn-quiet card-enter absolute h-10 px-4 text-[14px] shadow-[var(--shadow-float)]",
-              // Phones: under Mapbox's logo, which sits top-right there.
-              layout.compact ? "right-3 top-[max(52px,calc(env(safe-area-inset-top)+40px))]" : "bottom-8 left-8",
+              // Phones: under Mapbox's logo row at the header's right.
+              layout.compact ? "right-3 top-[calc(max(20px,env(safe-area-inset-top))+102px)]" : "bottom-8 left-8",
             )}
             onClick={() => setRest((n) => n + 1)}
           >
@@ -286,6 +327,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         card && (
           <div
             // The idle note sits centred in the sheet's space; cards rise from the bottom.
+            data-panel="sheet"
             className={clsx(
               "absolute inset-x-0 bottom-0 px-3 pb-[max(12px,env(safe-area-inset-bottom))]",
               idle && "flex flex-col justify-center",
@@ -302,6 +344,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         )
       ) : (
         <aside
+          data-panel="side"
           className="absolute inset-y-0 right-0 flex items-center px-6"
           style={{ width: layout.column }}
           aria-label="Conversation"

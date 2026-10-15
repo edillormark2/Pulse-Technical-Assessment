@@ -54,7 +54,8 @@ export default function CallCard({
 
   return (
     <section className="card card-enter w-full" aria-labelledby="call-card-title">
-      <h2 id="call-card-title" className="text-[15px] text-opaline-200">
+      <h2 id="call-card-title" className="flex items-center gap-2.5 text-[15px] text-opaline-200">
+        <span className="mark" data-state={phase} aria-hidden="true" />
         {caller ? "Asking a stranger to talk" : "Connecting"}
       </h2>
       {person && (
@@ -67,7 +68,7 @@ export default function CallCard({
       <ol className="mt-7 space-y-4" aria-live="polite">
         {stages.map((s) => (
           <li key={s.label} className="flex gap-3" aria-current={s.status === "current" ? "step" : undefined}>
-            <span className={clsx("stage-mark mt-[7px]", `stage-mark--${s.status}`)} aria-hidden="true" />
+            <span className={clsx("stage-tick mt-[4px]", `stage-tick--${s.status}`)} aria-hidden="true" />
             <div>
               <p className={clsx("text-[15px]", s.status === "pending" ? "text-opaline-500" : "text-opaline-50")}>
                 {s.label}

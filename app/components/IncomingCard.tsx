@@ -16,12 +16,13 @@ export default function IncomingCard({
 }) {
   return (
     <section className="card card-enter w-full" aria-labelledby="incoming-title">
-      <h2 id="incoming-title" className="text-[15px] text-opaline-50">
+      <h2 id="incoming-title" className="flex items-center gap-2.5 text-[15px] text-opaline-50">
+        <span className="mark" data-state="ringing" aria-hidden="true" />
         Someone wants to talk
       </h2>
       {person && (
         <>
-          <p className="numeral mt-3 text-[72px] leading-[0.86] text-signal">{formatClock(person.minutes)}</p>
+          <p className="numeral mt-3 text-[72px] leading-[0.86] text-opaline-50">{formatClock(person.minutes)}</p>
           <p className="mt-2 text-[14px] text-opaline-400">their {person.dayWord}</p>
           <p className="tabular mt-5 text-[15px] text-opaline-200">
             {formatHoursApart(person.hoursApart)} · {formatDistance(person.km)}

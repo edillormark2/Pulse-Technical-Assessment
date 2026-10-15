@@ -21,7 +21,8 @@ export default function PersonCard({
   return (
     <section className="card card-enter w-full" aria-labelledby="person-card-title">
       <div className="flex items-center justify-between">
-        <h2 id="person-card-title" className="text-[15px] text-opaline-200">
+        <h2 id="person-card-title" className="flex items-center gap-2.5 text-[15px] text-opaline-200">
+          <span className="mark" data-state={busy ? "busy" : "free"} aria-hidden="true" />
           Stranger
         </h2>
         <button type="button" className="icon-button -mr-2" aria-label="Close" onClick={onClose}>

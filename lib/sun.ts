@@ -155,19 +155,16 @@ export function distanceKm(a: LatLng, b: LatLng): number {
 export type PartOfDay = "night" | "dawn" | "morning" | "afternoon" | "evening" | "dusk";
 
 /**
- * How someone's day looks right now. Darkness comes from the real sun at
- * their dot; morning/afternoon/evening follow the clock they actually see
- * (`clock`, minutes after midnight) so "12:25" never reads as "morning".
+ * How someone's day reads right now, the same words on both ends of a call.
+ * The clock they actually see names it (morning, afternoon, evening, night);
+ * the real sun at their dot only adds dawn and dusk while it is in twilight.
  * Without a known clock, their sun-time stands in.
  */
 export function partOfDay(place: LatLng, date: Date, clock?: number): PartOfDay {
+  const minutes = clock ?? solarMinutes(place.lng, date);
   const altitude = sunAltitude(place, date);
-  const hour = (clock ?? solarMinutes(place.lng, date)) / 60;
-  if (altitude < -6) return "night";
-  if (altitude < 0) return hour < 12 ? "dawn" : "dusk";
-  if (hour < 12) return "morning";
-  if (hour < 17) return "afternoon";
-  return "evening";
+  if (altitude < 0 && altitude >= -6) return minutes < 12 * 60 ? "dawn" : "dusk";
+  return partOfClock(minutes);
 }
 
 /** Part of day from a wall clock alone, for before anyone knows where you are. */

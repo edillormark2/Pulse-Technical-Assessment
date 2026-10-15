@@ -60,10 +60,13 @@ export default function ChatCard({
           </h2>
           {person ? (
             <>
-              <p className="numeral text-[44px] leading-none text-signal">{formatClock(person.minutes)}</p>
-              <p className="tabular mt-1.5 text-[13px] text-opaline-400">
-                their {person.dayWord}
-                <span className="hidden sm:inline"> · {formatDistance(person.km)}</span>
+              <p className="numeral text-[56px] leading-[0.86] text-signal md:text-[80px]">{formatClock(person.minutes)}</p>
+              <p className="tabular mt-1.5 flex items-center gap-2 text-[13px] text-opaline-400">
+                <span className="mark" data-state="talking" aria-hidden="true" />
+                <span>
+                  their {person.dayWord}
+                  <span className="hidden sm:inline"> · {formatDistance(person.km)}</span>
+                </span>
               </p>
             </>
           ) : (

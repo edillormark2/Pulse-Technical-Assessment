@@ -4,16 +4,27 @@ import { useEffect, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { GeoJSONSource, Map as MapboxMap, Marker } from "mapbox-gl";
 import type { PeerDot, PublicSelf } from "@/lib/types";
-import { nightRing } from "@/lib/sun";
-import { greatCirclePath } from "@/lib/geo";
+import { distanceKm, nightRing } from "@/lib/sun";
 import { useViewport } from "@/lib/use-world-clock";
 
 // Public (pk.*) token, inlined at build time. Deliberately no fallback: a
 // missing token must surface the setup hint below, not a silently blank map.
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
-/** One mark per state, identical on the globe, the dial and the panel. */
-export type MarkState = "free" | "busy" | "selected" | "calling" | "ringing" | "talking";
+/**
+ * One mark per state, identical on the globe, the dial and the panel. Your own
+ * call reads hollow red (asking), half red (connecting), full red (talking);
+ * someone asking you is red and pulsing; someone who just left fades out.
+ */
+export type MarkState =
+  | "free"
+  | "busy"
+  | "selected"
+  | "calling"
+  | "connecting"
+  | "talking"
+  | "ringing"
+  | "gone";
 
 /** Where the globe sits on screen: the dial is drawn around it. */
 export interface GlobeView {
@@ -22,10 +33,10 @@ export interface GlobeView {
   radius: number;
 }
 
-// The globe in the dial's own lacquer. Ocean sits a step above the page's
-// ground so the globe reads as an object against space.
+// The globe in the dial's own lacquer. Space is the page's ground, so the
+// globe sits on the same night as everything else; ocean is a step above it.
 const INK = {
-  space: "#0a1428",
+  space: "#0f1b33",
   ocean: "#14274a",
   land: "#2b4268",
   border: "#3a5383",
@@ -33,12 +44,32 @@ const INK = {
   label: "#7f8ba3",
   city: "#a3aec2",
   night: "#040a17",
-  signal: "#e5483a",
 };
-const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-const ARC_FADE_MS = 500;
+/** Sun altitudes for the night's edge: sunset down through nautical twilight. */
+const NIGHT_BANDS = [0, -3, -6, -9, -12, -15];
+const NIGHT_OPACITY = 0.12;
+/** While you talk, the world steps back this far towards the ground. */
+const RECEDE = 0.45;
+const RECEDE_MS = 700;
 const PRIVACY_KM = 3;
 const EARTH_KM = 6371;
+/** Turn the globe to someone only when they are past its visible face. */
+const FACE_DEG = 80;
+
+/** Mix two #rrggbb colours: t = 0 gives `a`, t = 1 gives `b`. */
+function mix(a: string, b: string, t: number): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  const out = [0, 1, 2].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t));
+  return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+type ColorProp = "background-color" | "fill-color" | "line-color";
+
+/** Layers that carry the world's colour, collected while painting, so the
+ *  globe can recede during a call and come back after. */
+interface WorldLayers {
+  paint: { id: string; prop: ColorProp; color: string }[];
+}
 
 /**
  * Mapbox zoom at which the globe's scale at the centre is `px` per radian.
@@ -92,21 +123,27 @@ function fitZoom(map: MapboxMap, radius: number): number {
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 /** Restyle Mapbox's dark style into the World Time palette. */
-function paintWorldTime(map: MapboxMap) {
+function paintWorldTime(map: MapboxMap): WorldLayers {
+  const world: WorldLayers = { paint: [] };
+  const tint = (id: string, prop: ColorProp, color: string) => {
+    map.setPaintProperty(id, prop, color);
+    map.setPaintProperty(id, `${prop}-transition` as `${ColorProp}-transition`, { duration: RECEDE_MS, delay: 0 });
+    world.paint.push({ id, prop, color });
+  };
   for (const layer of map.getStyle()?.layers ?? []) {
     const { id, type } = layer;
     const hide = () => map.setLayoutProperty(id, "visibility", "none");
     if (type === "background") {
-      map.setPaintProperty(id, "background-color", INK.land);
+      tint(id, "background-color", INK.land);
     } else if (type === "fill") {
-      if (/water/.test(id)) map.setPaintProperty(id, "fill-color", INK.ocean);
+      if (/water/.test(id)) tint(id, "fill-color", INK.ocean);
       else if (/building/.test(id)) map.setPaintProperty(id, "fill-color", INK.road);
       else hide(); // landcover, parks, land use, hillshade: noise at this scale
     } else if (type === "line") {
       if (id === "admin-0-boundary") {
-        map.setPaintProperty(id, "line-color", INK.border);
+        tint(id, "line-color", INK.border);
         map.setPaintProperty(id, "line-opacity", 0.7);
-      } else if (/water/.test(id)) map.setPaintProperty(id, "line-color", INK.ocean);
+      } else if (/water/.test(id)) tint(id, "line-color", INK.ocean);
       else if (/road|bridge|tunnel/.test(id)) map.setPaintProperty(id, "line-color", INK.road);
       else hide();
     } else if (type === "symbol") {
@@ -118,26 +155,31 @@ function paintWorldTime(map: MapboxMap) {
       } else if (id === "settlement-major-label") {
         map.setPaintProperty(id, "text-color", INK.city);
         map.setPaintProperty(id, "text-halo-width", 0);
+        // Names sit beside their city, never under your own mark and its halo.
+        map.setLayoutProperty(id, "text-variable-anchor", ["top", "bottom", "left", "right"]);
+        map.setLayoutProperty(id, "text-radial-offset", 2);
       } else hide(); // continents, POIs, roads, water names: tiny tracked caps
     } else if (type === "fill-extrusion" || type === "hillshade") {
       hide();
     }
   }
+  // No glow: the atmosphere is the ground itself, so the limb stays crisp.
   map.setFog({
     range: [0.8, 8],
-    color: "#1d2f55",
+    color: INK.space,
     "high-color": INK.space,
-    "horizon-blend": 0.03,
+    "horizon-blend": 0.02,
     "space-color": INK.space,
     "star-intensity": 0,
   });
+  return world;
 }
 
 function nightData(now: Date): GeoJSON.FeatureCollection {
-  // Three bands (sunset, civil and nautical twilight) stack into a soft edge.
+  // Bands from sunset down through nautical twilight stack into a soft edge.
   return {
     type: "FeatureCollection",
-    features: [0, -6, -12].map((altitude) => ({
+    features: NIGHT_BANDS.map((altitude) => ({
       type: "Feature",
       properties: {},
       geometry: { type: "Polygon", coordinates: [nightRing(now, altitude)] },
@@ -154,7 +196,7 @@ function createDot(): HTMLButtonElement {
   el.tabIndex = -1;
   el.setAttribute("aria-hidden", "true");
   const core = document.createElement("span");
-  core.className = "globe-dot__core";
+  core.className = "mark mark--on-map";
   el.appendChild(core);
   return el;
 }
@@ -172,7 +214,7 @@ export default function Globe({
   peers,
   me,
   marks,
-  live,
+  recede,
   focus,
   rest,
   dialRadius,
@@ -182,10 +224,10 @@ export default function Globe({
 }: {
   peers: PeerDot[];
   me: PublicSelf | null;
-  /** States other than the default free/busy (selection and the live call). */
+  /** States other than the default free/busy (selection, the live call, departures). */
   marks: Record<string, MarkState>;
-  /** The live call's other end; the arc is dotted until you are talking. */
-  live: { lat: number; lng: number; talking: boolean } | null;
+  /** While you talk the world steps back; the ring and the marks stay lit. */
+  recede: boolean;
   /** Turn the globe to this point (a person picked on the dial). */
   focus: { lat: number; lng: number; key: string } | null;
   /** Bump to zoom back out to the dial. */
@@ -202,6 +244,8 @@ export default function Globe({
   const meMarkerRef = useRef<Marker | null>(null);
   /** Zoom that fits the dial; also the floor, so the globe never shrinks inside it. */
   const fitRef = useRef<number | null>(null);
+  /** The world's coloured layers, for receding during a call. */
+  const worldRef = useRef<WorldLayers | null>(null);
   const [ready, setReady] = useState(false);
   const [tokenRejected, setTokenRejected] = useState(false);
 
@@ -252,7 +296,7 @@ export default function Globe({
         const key = `${map.getZoom()}:${canvas.clientWidth}x${canvas.clientHeight}`;
         if (disc.key !== key) disc = { key, radius: measureEdge(map) };
         latest.current.onView({ x: c.x, y: c.y, radius: disc.radius });
-        const haloPx = Math.max(56, ((2 * PRIVACY_KM) / EARTH_KM) * measureScale(map));
+        const haloPx = Math.max(40, ((2 * PRIVACY_KM) / EARTH_KM) * measureScale(map));
         meMarkerRef.current?.getElement().style.setProperty("--halo", `${haloPx}px`);
       };
       const schedule = () => {
@@ -265,7 +309,7 @@ export default function Globe({
         fitRef.current = fitZoom(map, latest.current.dialRadius);
         map.jumpTo({ zoom: fitRef.current });
         map.setMinZoom(fitRef.current);
-        paintWorldTime(map);
+        worldRef.current = paintWorldTime(map);
         const firstLabel = map.getStyle()?.layers?.find((l) => l.type === "symbol")?.id;
         map.addSource("night", { type: "geojson", data: nightData(new Date()) });
         map.addLayer(
@@ -273,23 +317,15 @@ export default function Globe({
             id: "night",
             type: "fill",
             source: "night",
-            paint: { "fill-color": INK.night, "fill-opacity": 0.2, "fill-antialias": false },
+            paint: {
+              "fill-color": INK.night,
+              "fill-opacity": NIGHT_OPACITY,
+              "fill-opacity-transition": { duration: RECEDE_MS, delay: 0 },
+              "fill-antialias": false,
+            },
           },
           firstLabel,
         );
-        map.addSource("call-arc", { type: "geojson", data: EMPTY });
-        map.addLayer({
-          id: "call-arc",
-          type: "line",
-          source: "call-arc",
-          layout: { "line-cap": "round", "line-join": "round" },
-          paint: {
-            "line-color": INK.signal,
-            "line-width": 2.25,
-            "line-opacity": 0.95,
-            "line-opacity-transition": { duration: ARC_FADE_MS, delay: 0 },
-          },
-        });
         nightTimer = setInterval(() => {
           (map.getSource("night") as GeoJSONSource | undefined)?.setData(nightData(new Date()));
         }, 60_000);
@@ -399,7 +435,10 @@ export default function Globe({
           const pos = marker.getLngLat();
           if (pos.lng !== peer.lng || pos.lat !== peer.lat) marker.setLngLat([peer.lng, peer.lat]);
         }
-        marker.getElement().dataset.state = marks[peer.id] ?? (peer.busy ? "busy" : "free");
+        const state = marks[peer.id] ?? (peer.busy ? "busy" : "free");
+        const el = marker.getElement();
+        (el.firstElementChild as HTMLElement).dataset.state = state;
+        el.style.pointerEvents = state === "gone" ? "none" : "";
       }
       for (const [id, marker] of markers) {
         if (!seen.has(id)) {
@@ -413,33 +452,17 @@ export default function Globe({
     };
   }, [peers, marks, ready]);
 
-  // The call arc: a great circle between the two of you.
-  const liveLat = live?.lat;
-  const liveLng = live?.lng;
-  const talking = live?.talking ?? false;
+  // Scale is billing: while you talk the land, the sea and the night step back
+  // towards the ground, leaving the ring, the marks and their hours lit.
   useEffect(() => {
     const map = mapRef.current;
-    const source = map?.getSource("call-arc") as GeoJSONSource | undefined;
-    if (!map || !ready || !source) return;
-    if (liveLat === undefined || liveLng === undefined || !me) {
-      // Fade the line out, then drop it (unless a new call drew one meanwhile).
-      map.setPaintProperty("call-arc", "line-opacity", 0);
-      const t = setTimeout(() => {
-        if (map.getPaintProperty("call-arc", "line-opacity") === 0) source.setData(EMPTY);
-      }, ARC_FADE_MS);
-      return () => clearTimeout(t);
+    const world = worldRef.current;
+    if (!map || !ready || !world) return;
+    for (const { id, prop, color } of world.paint) {
+      map.setPaintProperty(id, prop, recede ? mix(color, INK.space, RECEDE) : color);
     }
-    map.setPaintProperty("call-arc", "line-opacity", 0.95);
-    source.setData({
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: greatCirclePath(me, { lat: liveLat, lng: liveLng }),
-      },
-    });
-    map.setPaintProperty("call-arc", "line-dasharray", talking ? [1, 0] : [0.6, 1.8]);
-  }, [ready, me, liveLat, liveLng, talking]);
+    map.setPaintProperty("night", "fill-opacity", recede ? NIGHT_OPACITY * (1 - RECEDE) : NIGHT_OPACITY);
+  }, [ready, recede]);
 
   // Turn the world to a person picked on the dial.
   const focusKey = focus?.key;
@@ -448,13 +471,16 @@ export default function Globe({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || focusLat === undefined || focusLng === undefined) return;
+    // Nothing jumps: someone already on the visible face stays where they are.
+    const away = (distanceKm(map.getCenter(), { lat: focusLat, lng: focusLng }) / EARTH_KM) * (180 / Math.PI);
+    if (away < FACE_DEG) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     map.easeTo({ center: [focusLng, focusLat], duration: reduce ? 0 : 900, easing: easeInOutCubic });
   }, [ready, focusKey, focusLat, focusLng]);
 
   return (
     // `isolate` keeps Mapbox's controls (z-index 2) beneath the panels above.
-    <div className="absolute inset-0 isolate bg-lacquer-950">
+    <div className="absolute inset-0 isolate bg-lacquer-900">
       {/* The fade lives on a wrapper: Mapbox adds its own classes to the
           container, and React must never rewrite that element's className. */}
       <div className={`h-full w-full transition-opacity duration-700 ease-[var(--ease-out)] ${ready ? "opacity-100" : "opacity-0"}`}>
