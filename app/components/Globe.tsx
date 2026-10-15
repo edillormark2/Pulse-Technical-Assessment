@@ -455,7 +455,10 @@ export default function Globe({
   return (
     // `isolate` keeps Mapbox's controls (z-index 2) beneath the panels above.
     <div className="absolute inset-0 isolate bg-lacquer-950">
-      <div ref={containerRef} className="h-full w-full" />
+      <div
+        ref={containerRef}
+        className={`h-full w-full transition-opacity duration-700 ease-[var(--ease-out)] ${ready ? "opacity-100" : "opacity-0"}`}
+      />
       {(!TOKEN || tokenRejected) && (
         <div className="absolute inset-0 grid place-items-center p-6 text-center">
           <p className="max-w-md rounded-[var(--radius-panel)] bg-lacquer-850 p-5 text-sm text-opaline-200">

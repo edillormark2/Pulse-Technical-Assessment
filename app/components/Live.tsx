@@ -12,6 +12,7 @@ import IncomingCard from "./IncomingCard";
 import ChatCard from "./ChatCard";
 import EndingCard from "./EndingCard";
 import VideoStage from "./VideoStage";
+import HourFace from "./HourFace";
 import type { usePulse } from "@/lib/use-pulse";
 import type { PeerDot, PublicSelf } from "@/lib/types";
 import { localUtcOffset } from "@/lib/api";
@@ -24,7 +25,8 @@ import {
   isDark,
   partOfDay,
 } from "@/lib/sun";
-import { DAY_WORDS, formatDistance, useNow, useViewport } from "@/lib/use-world-clock";
+import { DAY_WORDS, formatDistance, useNow } from "@/lib/use-world-clock";
+import { useDialLayout } from "@/lib/use-dial-layout";
 
 type Pulse = ReturnType<typeof usePulse>;
 
@@ -60,34 +62,6 @@ function describe(peer: PeerDot, me: PublicSelf, now: Date): PersonView {
     hoursApart: apart,
     dayWord: DAY_WORDS[partOfDay(peer, now, minutes)],
     km: distanceKm(me, peer),
-  };
-}
-
-/**
- * Dial geometry for the viewport. Desktop keeps a right-hand column for the
- * panel at all times, so opening a card never moves the globe; phones put the
- * dial at the top and the panel in a bottom sheet.
- */
-function useDialLayout() {
-  const { width, height } = useViewport();
-  const compact = width < 768;
-  if (!compact) {
-    const column = Math.round(Math.min(440, Math.max(360, width * 0.3)));
-    const outer = Math.min(width - column, height - 64) / 2 - 12;
-    return {
-      compact,
-      column,
-      globeRadius: Math.max(120, outer - 26 - 22 - 14 - 18),
-      padding: { top: 0, right: column, bottom: 0, left: 0 },
-    };
-  }
-  const sheet = Math.round(height * 0.38);
-  const outer = Math.min(width, height - sheet - 72) / 2 - 4;
-  return {
-    compact,
-    column: 0,
-    globeRadius: Math.max(90, outer - 22 - 16 - 11 - 14),
-    padding: { top: 72, right: 0, bottom: sheet, left: 0 },
   };
 }
 
@@ -137,7 +111,8 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const selected = people.find((v) => v.peer.id === selectedId) ?? null;
   const livePerson = people.find((v) => v.peer.id === liveId) ?? null;
 
-  const dialFits = view !== null && view.radius <= layout.globeRadius * 1.08;
+  // Until the globe reports in, the ring stays where the entry screen drew it.
+  const dialFits = view === null || view.radius <= layout.globeRadius * 1.08;
 
   function select(id: string | null, fromDial = false) {
     if (conn.kind !== "idle") return; // the live call owns the panel
@@ -214,7 +189,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   } else if (selected) {
     card = <PersonCard person={selected} myMinutes={myMinutes} onAsk={ask} onClose={() => setSelectedId(null)} />;
   } else if (!layout.compact) {
-    card = <IdleNote others={peers.length} />;
+    card = <IdleNote others={pulse.synced ? peers.length : null} />;
   }
 
   return (
@@ -236,8 +211,15 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           onSelect={(id) => select(id)}
           onView={setView}
         />
+        {/* Your hour from the entry screen, until the globe develops over it. */}
+        <HourFace
+          center={layout.center}
+          radius={layout.globeRadius}
+          minutes={myMinutes}
+          className={clsx("transition-opacity duration-700 ease-[var(--ease-out)]", view && "opacity-0")}
+        />
         <Dial
-          center={view}
+          center={view ?? layout.center}
           globeRadius={layout.globeRadius}
           visible={dialFits}
           myMinutes={myMinutes}
@@ -250,7 +232,13 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         <header className="pointer-events-none absolute left-0 top-0 p-5 sm:p-8">
           <h1 className="numeral text-[34px] leading-none sm:text-[44px]">Pulse</h1>
           <p className="tabular mt-2 text-[15px] text-opaline-200">
-            {formatClock(myMinutes)} here · {peers.length} {peers.length === 1 ? "person" : "people"} awake
+            {formatClock(myMinutes)} here
+            {pulse.synced && (
+              <span className="fade-in">
+                {" "}
+                · {peers.length} {peers.length === 1 ? "person" : "people"} awake
+              </span>
+            )}
           </p>
           {peers.length > 0 && (
             <p className="tabular mt-1 text-[13px] text-opaline-400">

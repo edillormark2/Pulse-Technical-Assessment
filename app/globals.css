@@ -442,6 +442,29 @@ a,
   }
 }
 
+/* Arrival: the band fades up, then the hours light clockwise from yours and
+   your hour develops inside the ring. Opacity only, so nothing moves. */
+.dial-enter svg {
+  animation: fade-in 400ms var(--ease-out) both;
+}
+.dial-hour-in {
+  animation: fade-in 260ms var(--ease-out) both;
+}
+.hour-face--enter {
+  animation: fade-in 700ms var(--ease-out) 150ms both;
+}
+.hour-face--enter .hour-face__text {
+  animation: fade-in 600ms var(--ease-out) 450ms both;
+}
+.fade-in {
+  animation: fade-in 500ms var(--ease-out) both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* Waits develop: the 30-second window, swept by a red hand. */
 .dial-countdown {
   fill: none;

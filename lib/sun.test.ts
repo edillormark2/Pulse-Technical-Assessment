@@ -8,6 +8,7 @@ import {
   hoursApart,
   isDark,
   nightRing,
+  partOfClock,
   partOfDay,
   solarMinutes,
   subsolarPoint,
@@ -98,4 +99,16 @@ test("part of day", () => {
   assert.equal(partOfDay(manila, new Date("2026-03-20T15:56:00Z")), "night");
   assert.equal(partOfDay(manila, new Date("2026-03-20T01:00:00Z")), "morning");
   assert.equal(partOfDay(manila, new Date("2026-03-20T07:00:00Z")), "afternoon");
+});
+
+test("part of day from the clock alone, before a location is known", () => {
+  const at = (h: number, m = 0) => partOfClock(h * 60 + m);
+  assert.equal(at(0), "night");
+  assert.equal(at(4, 59), "night");
+  assert.equal(at(5), "morning");
+  assert.equal(at(11, 59), "morning");
+  assert.equal(at(12), "afternoon");
+  assert.equal(at(17), "evening");
+  assert.equal(at(20, 59), "evening");
+  assert.equal(at(21), "night");
 });

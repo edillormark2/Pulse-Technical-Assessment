@@ -1,5 +1,9 @@
-/** What the panel says before you pick anyone: how to start, what marks mean. */
-export default function IdleNote({ others }: { others: number }) {
+/**
+ * What the panel says before you pick anyone: how to start, what marks mean.
+ * `others` is null until the first presence poll lands, so the empty state
+ * never flashes before anyone could have been found.
+ */
+export default function IdleNote({ others }: { others: number | null }) {
   return (
     <div className="card-enter max-w-[320px] text-[15px] leading-relaxed text-opaline-200">
       {others === 0 ? (
@@ -33,7 +37,7 @@ export default function IdleNote({ others }: { others: number }) {
         </li>
       </ul>
       <p className="mt-8 text-[13px] text-opaline-500">
-        Your dot sits 1–3 km from where you are. Nothing is stored; closing this tab removes you.
+        Your dot sits <span className="whitespace-nowrap">1–3 km</span> from where you are. Nothing is stored; closing this tab removes you.
       </p>
     </div>
   );

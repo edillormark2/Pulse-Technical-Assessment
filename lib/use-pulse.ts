@@ -38,6 +38,8 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   const [phase, setPhase] = useState<"gate" | "live">("gate");
   const [sessionId] = useState(() => crypto.randomUUID());
   const [peers, setPeers] = useState<PeerDot[]>([]);
+  // False until the first poll lands, so "nobody here" is never shown early.
+  const [synced, setSynced] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -396,6 +398,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
 
   function handlePoll(data: PollResponse) {
     setPeers(data.peers);
+    setSynced(true);
     for (const s of data.signals) processSignal(s);
 
     // Keep the latest known position and clock of whoever we're connected to.
@@ -478,6 +481,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
   return {
     phase,
     peers,
+    synced,
     me,
     conn,
     livePeer,

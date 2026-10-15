@@ -71,6 +71,7 @@ export default function Dial({
   people,
   live,
   compact,
+  reveal = false,
   onSelect,
 }: {
   center: { x: number; y: number } | null;
@@ -83,6 +84,8 @@ export default function Dial({
   people: DialPerson[];
   live: DialLive | null;
   compact: boolean;
+  /** Turn the ring into place as it first appears (the entry screen). */
+  reveal?: boolean;
   onSelect: (id: string) => void;
 }) {
   const track = globeRadius + (compact ? 11 : 13); // people
@@ -96,6 +99,9 @@ export default function Dial({
 
   // The day/night band turns once a day; you stay at the top.
   const hourAngle = (hour: number) => angleOf(hour * 60 - myMinutes);
+  // On arrival the hours light up clockwise from yours, 25 ms apart.
+  const revealDelay = (hour: number) =>
+    reveal ? { animationDelay: `${300 + Math.floor((((hour * 60 - myMinutes) / 60) % 24 + 24) % 24) * 25}ms` } : undefined;
   const { placed, overflow } = layout(people, compact ? 4.6 : 3.4);
 
   // Measured reveal: people present when you arrive appear in hour order from
@@ -133,6 +139,7 @@ export default function Dial({
       className={clsx(
         "pointer-events-none absolute transition-opacity duration-[240ms] ease-[var(--ease-out)]",
         visible ? "opacity-100" : "opacity-0",
+        reveal && "dial-enter",
       )}
       style={{ left: center.x - c, top: center.y - c, width: size, height: size }}
     >
@@ -155,6 +162,8 @@ export default function Dial({
               stroke={day ? "var(--color-lacquer-700)" : "var(--color-opaline-500)"}
               strokeWidth={h % 6 === 0 ? 2 : 1.25}
               strokeLinecap="round"
+              className={reveal ? "dial-hour-in" : undefined}
+              style={revealDelay(h)}
             />
           );
         })}
@@ -167,8 +176,8 @@ export default function Dial({
               y={y}
               dy="0.35em"
               textAnchor="middle"
-              className="tabular font-display"
-              style={{ fontStretch: "75%", fontWeight: 600, fontSize: compact ? 11 : 13 }}
+              className={clsx("tabular font-display", reveal && "dial-hour-in")}
+              style={{ fontStretch: "75%", fontWeight: 600, fontSize: compact ? 11 : 13, ...revealDelay(h) }}
               fill="var(--color-opaline-400)"
             >
               {String(h).padStart(2, "0")}
@@ -206,31 +215,33 @@ export default function Dial({
       </svg>
 
       {/* People: real buttons, clockwise from you, so the dial is also the list. */}
-      <ol aria-label="People online, by their local time" className="absolute inset-0 m-0 list-none p-0">
-        {placed.map(({ person, angle }, i) => {
-          const [x, y] = polar(c, track, angle);
-          return (
-            <li key={person.id}>
-              <button
-                type="button"
-                aria-label={person.label}
-                aria-pressed={person.state === "selected"}
-                data-state={person.state}
-                onClick={() => onSelect(person.id)}
-                disabled={!visible}
-                className={clsx("dial-mark pointer-events-auto", revealNow && "dial-mark--reveal")}
-                style={{
-                  left: x,
-                  top: y,
-                  animationDelay: revealNow ? `${Math.min(i * 45, 600)}ms` : undefined,
-                }}
-              >
-                <span className="dial-mark__core" />
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+      {placed.length > 0 && (
+        <ol aria-label="People online, by their local time" className="absolute inset-0 m-0 list-none p-0">
+          {placed.map(({ person, angle }, i) => {
+            const [x, y] = polar(c, track, angle);
+            return (
+              <li key={person.id}>
+                <button
+                  type="button"
+                  aria-label={person.label}
+                  aria-pressed={person.state === "selected"}
+                  data-state={person.state}
+                  onClick={() => onSelect(person.id)}
+                  disabled={!visible}
+                  className={clsx("dial-mark pointer-events-auto", revealNow && "dial-mark--reveal")}
+                  style={{
+                    left: x,
+                    top: y,
+                    animationDelay: revealNow ? `${Math.min(i * 45, 600)}ms` : undefined,
+                  }}
+                >
+                  <span className="dial-mark__core" />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
       {overflow.map(({ angle, count }) => {
         const [x, y] = polar(c, track - (compact ? 14 : 18), angle);
         return (

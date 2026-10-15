@@ -169,3 +169,12 @@ export function partOfDay(place: LatLng, date: Date, clock?: number): PartOfDay 
   if (hour < 17) return "afternoon";
   return "evening";
 }
+
+/** Part of day from a wall clock alone, for before anyone knows where you are. */
+export function partOfClock(minutes: number): PartOfDay {
+  const hour = minutes / 60;
+  if (hour < 5 || hour >= 21) return "night";
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+}
