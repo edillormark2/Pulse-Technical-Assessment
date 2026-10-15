@@ -6,6 +6,7 @@ import { DemoButton } from "./DemoVideo";
 import Dial from "./Dial";
 import HourFace from "./HourFace";
 import { localUtcOffset } from "@/lib/api";
+import { locate, locationProblem } from "@/lib/locate";
 import { clockMinutes, formatClock } from "@/lib/sun";
 import { useNow } from "@/lib/use-world-clock";
 import { useDialLayout, useHydrated } from "@/lib/use-dial-layout";
@@ -45,22 +46,14 @@ export default function EntryGate({ onReady }: { onReady: (lat: number, lng: num
       return;
     }
     setStatus("locating");
-    navigator.geolocation.getCurrentPosition(
+    locate(navigator.geolocation).then(
       (pos) => {
         setStatus("joining");
         onReady(pos.coords.latitude, pos.coords.longitude).catch(() =>
           fail("Couldn’t reach Pulse. Check your connection, then try again."),
         );
       },
-      (err) =>
-        fail(
-          err.code === err.PERMISSION_DENIED
-            ? "Location is blocked for this site. Allow it in your browser’s site settings, then try again."
-            : "Couldn’t find where you are. Check that location services are on, then try again.",
-        ),
-      // High accuracy + maximumAge:0 forces a fresh fix (Wi-Fi/GPS scan)
-      // instead of reusing the browser's cached IP-based location.
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+      (err: GeolocationPositionError | undefined) => fail(locationProblem(err?.code)),
     );
   }
 
