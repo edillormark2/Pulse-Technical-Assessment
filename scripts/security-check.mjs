@@ -1,6 +1,7 @@
 // Attack the Pulse API the way a stranger with curl would, and assert each
 // attempt is refused: forged identities, signals outside a call, harassment
-// after "not now", oversized payloads, floods, and requests from other sites.
+// after "not now", oversized or made-up payloads, floods, and requests from
+// other sites.
 //
 // Run against a local server with the database in .env:
 //   npm run dev            (or: npm run build && npm start)
@@ -79,6 +80,11 @@ check(
   (await signal(A, B.id, "offer", JSON.stringify({ type: "offer", sdp: "v=0" }))).status === 409,
 );
 check("asking with a payload attached is refused", (await signal(A, B.id, "request", "x")).status === 400);
+check("asking with a made-up intent is refused", (await signal(A, B.id, "request", '{"intent":"sunset"}')).status === 400);
+check(
+  "an intent with anything added to it is refused",
+  (await signal(A, B.id, "request", '{"intent":"sunrise","note":"<img src=x onerror=alert(1)>"}')).status === 400,
+);
 check("signalling yourself is refused", (await signal(A, A.id, "request")).status === 400);
 check("signalling a made-up id is refused", (await signal(A, "not-an-id", "request")).status === 400);
 
@@ -108,8 +114,12 @@ check(
   !bAfter.json.signals.some((s) => s.type === "request") && aAfter.json.signals.some((s) => s.type === "decline") && bAfter.json.call === null,
 );
 
-check("C asks B", (await signal(C, B.id, "request")).status === 200);
-await poll(B);
+check("C asks B to watch their sunrise", (await signal(C, B.id, "request", '{"intent":"sunrise"}')).status === 200);
+p = await poll(B);
+check(
+  "B receives the ask with exactly that intent",
+  p.json.signals.some((s) => s.type === "request" && s.fromId === C.id && s.payload === '{"intent":"sunrise"}'),
+);
 check("B accepts C", (await signal(B, C.id, "accept")).status === 200);
 p = await poll(C);
 check("C sees accept and a connected call", p.json.signals.some((s) => s.type === "accept") && p.json.call?.state === "connected");

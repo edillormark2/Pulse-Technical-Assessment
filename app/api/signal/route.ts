@@ -27,8 +27,15 @@ export const dynamic = "force-dynamic";
 
 const TYPES: SignalType[] = ["request", "accept", "decline", "offer", "answer", "ice", "end"];
 
+/** What an ask may say it is for: only these exact payloads are passed on. */
+const INTENTS = new Set(['{"intent":"sunrise"}']);
+
 /** What a client may attach to each signal: SDP and ICE carry JSON; the rest nothing. */
 function payloadProblem(type: SignalType, payload: unknown): string | null {
+  if (type === "request") {
+    const none = payload === undefined || payload === null;
+    return none || (typeof payload === "string" && INTENTS.has(payload)) ? null : "unexpected payload";
+  }
   const limit = type === "offer" || type === "answer" ? MAX_SDP : type === "ice" ? MAX_ICE : 0;
   if (limit === 0) return payload === undefined || payload === null ? null : "unexpected payload";
   if (typeof payload !== "string" || payload.length === 0) return "missing payload";
@@ -41,7 +48,7 @@ async function autoDecline(me: string, them: string, reason: DeclineReason) {
   return ok({ declined: reason });
 }
 
-async function ask(me: string, them: string): Promise<Response> {
+async function ask(me: string, them: string, intent: string | null): Promise<Response> {
   if (!(await allow(`request:${me}`, REQUEST_LIMIT.limit, REQUEST_LIMIT.windowMs))) {
     return fail(429, "too many requests", { "Retry-After": "30" });
   }
@@ -54,14 +61,14 @@ async function ask(me: string, them: string): Promise<Response> {
     return ok({ declined: true });
   }
   if (await startCall(me, them)) {
-    await deliver(me, them, "request");
+    await deliver(me, them, "request", intent);
     return ok();
   }
   // They asked us at the same moment: the clients pick who accepts.
   const mine = await callOf(me);
   if (mine?.peerId === them && mine.state === "ringing") {
     await markMutual(me);
-    await deliver(me, them, "request");
+    await deliver(me, them, "request", intent);
     return ok();
   }
   return autoDecline(me, them, "busy");
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest) {
 
   switch (signal) {
     case "request":
-      return ask(me, to);
+      return ask(me, to, typeof payload === "string" ? payload : null);
 
     case "accept": {
       if (!(await mayAnswer(me, to)) || !(await connectCall(me, to))) {

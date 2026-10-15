@@ -34,6 +34,9 @@ export interface SignalMsg {
   createdAt: string;
 }
 
+/** What an ask is for, carried in a request's payload. */
+export type Intent = "sunrise";
+
 /** Why the server said "not now" on someone's behalf (a decline's payload). */
 export type DeclineReason = "busy" | "away";
 

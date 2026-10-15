@@ -10,6 +10,7 @@ import { PeerSession, type DescType, type PeerControl } from "@/lib/webrtc";
 import { HANDSHAKE_POLL_MS, POLL_INTERVAL_MS } from "@/lib/presence";
 import type {
   DeclineReason,
+  Intent,
   PeerDot,
   PollResponse,
   PublicSelf,
@@ -19,8 +20,8 @@ import type {
 
 export type Conn =
   | { kind: "idle" }
-  | { kind: "requesting"; peerId: string }
-  | { kind: "incoming"; peerId: string }
+  | { kind: "requesting"; peerId: string; intent?: Intent }
+  | { kind: "incoming"; peerId: string; intent?: Intent }
   | { kind: "connecting"; peerId: string }
   | { kind: "connected"; peerId: string };
 
@@ -55,6 +56,16 @@ function declineReason(payload: string | null): DeclineReason | "them" {
     return reason === "busy" || reason === "away" ? reason : "them";
   } catch {
     return "them";
+  }
+}
+
+/** What an ask says it is for, if anything we understand. */
+function intentOf(payload: string | null): Intent | undefined {
+  try {
+    const intent = (JSON.parse(payload ?? "null") as { intent?: unknown } | null)?.intent;
+    return intent === "sunrise" ? intent : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -259,11 +270,12 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
     }
   }
 
-  function requestConnection(peerId: string) {
+  /** Ask someone to talk; `intent` says what for (watching their sunrise). */
+  function requestConnection(peerId: string, intent?: Intent) {
     if (connRef.current.kind !== "idle") return;
-    setConn({ kind: "requesting", peerId });
+    setConn({ kind: "requesting", peerId, intent });
     setLivePeer(peers.find((p) => p.id === peerId) ?? null);
-    void signal(peerId, "request");
+    void signal(peerId, "request", intent ? JSON.stringify({ intent }) : undefined);
     pollNow.current(); // switch to the handshake cadence now
     requestTimer.current = setTimeout(() => {
       if (
@@ -373,7 +385,7 @@ export function usePulse({ notify }: { notify: (message: string) => void }) {
       case "request": {
         const c = connRef.current;
         if (c.kind === "idle") {
-          setConn({ kind: "incoming", peerId: sig.fromId });
+          setConn({ kind: "incoming", peerId: sig.fromId, intent: intentOf(sig.payload) });
         } else if (c.kind === "requesting" && c.peerId === sig.fromId) {
           // We tapped each other at the same moment. Declining both requests
           // would turn away two people who both want to talk, so exactly one
