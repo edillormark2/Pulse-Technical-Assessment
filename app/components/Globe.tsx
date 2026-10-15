@@ -214,6 +214,7 @@ export default function Globe({
   peers,
   me,
   marks,
+  dawn,
   recede,
   focus,
   rest,
@@ -226,6 +227,8 @@ export default function Globe({
   me: PublicSelf | null;
   /** States other than the default free/busy (selection, the live call, departures). */
   marks: Record<string, MarkState>;
+  /** People at daybreak: their marks sit on a horizon line. */
+  dawn: string[];
   /** While you talk the world steps back; the ring and the marks stay lit. */
   recede: boolean;
   /** Turn the globe to this point (a person picked on the dial). */
@@ -437,7 +440,10 @@ export default function Globe({
         }
         const state = marks[peer.id] ?? (peer.busy ? "busy" : "free");
         const el = marker.getElement();
-        (el.firstElementChild as HTMLElement).dataset.state = state;
+        const core = el.firstElementChild as HTMLElement;
+        core.dataset.state = state;
+        if (dawn.includes(peer.id)) core.dataset.dawn = "";
+        else delete core.dataset.dawn;
         el.style.pointerEvents = state === "gone" ? "none" : "";
       }
       for (const [id, marker] of markers) {
@@ -450,7 +456,7 @@ export default function Globe({
     return () => {
       cancelled = true;
     };
-  }, [peers, marks, ready]);
+  }, [peers, marks, dawn, ready]);
 
   // Scale is billing: while you talk the land, the sea and the night step back
   // towards the ground, leaving the ring, the marks and their hours lit.

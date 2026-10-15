@@ -307,6 +307,23 @@
     --ring-color: var(--color-opaline-500);
     animation: mark-gone 1200ms var(--ease-out) forwards;
   }
+  /* Daybreak: their sun rises within half an hour. The mark sits on a horizon,
+     a line broken around the dot, whatever its state. */
+  .mark[data-dawn]::after {
+    content: "";
+    position: absolute;
+    top: calc(50% - 0.75px);
+    left: -7px;
+    right: -7px;
+    height: 1.5px;
+    border-radius: 1px;
+    background: linear-gradient(
+      to right,
+      var(--color-opaline-200) 0 5px,
+      transparent 5px calc(100% - 5px),
+      var(--color-opaline-200) calc(100% - 5px)
+    );
+  }
   /* In the legend the marks hold still. */
   .mark.mark--static[data-state] {
     animation: none;

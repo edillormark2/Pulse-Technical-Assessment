@@ -11,6 +11,8 @@ export interface DialPerson {
   /** Their clock minus yours, in minutes, folded into (-720, 720]. */
   deltaMinutes: number;
   state: MarkState;
+  /** Their sun rises within half an hour (or just rose): the mark sits on a horizon. */
+  dawn?: boolean;
   /** Accessible description, e.g. "Stranger, 06:42 their morning, 11,200 km away". */
   label: string;
 }
@@ -291,7 +293,7 @@ export default function Dial({
                     animationDelay: revealNow ? `${Math.min(i * 45, 600)}ms` : undefined,
                   }}
                 >
-                  <span className="mark" data-state={person.state} />
+                  <span className="mark" data-state={person.state} data-dawn={person.dawn || undefined} />
                 </button>
               </li>
             );

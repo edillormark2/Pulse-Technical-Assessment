@@ -20,11 +20,13 @@ import { localUtcOffset } from "@/lib/api";
 import {
   clockHoursApart,
   clockMinutes,
+  daybreak,
   distanceKm,
   formatClock,
   hoursApart,
   isDark,
   partOfDay,
+  type Daybreak,
 } from "@/lib/sun";
 import { DAY_WORDS, formatDistance, useNow, useViewport } from "@/lib/use-world-clock";
 import { DIAL, dialExtent, useDialLayout } from "@/lib/use-dial-layout";
@@ -38,6 +40,8 @@ export interface PersonView {
   hoursApart: number; // their clock minus yours
   dayWord: string;
   km: number;
+  /** Their sun is about to rise (or just rose): Daybreak. */
+  daybreak: Daybreak | null;
 }
 
 /** The tab icon while someone is asking: the dial with a red mark (a drawn mark, not a glyph). */
@@ -49,7 +53,7 @@ const RINGING_ICON = `data:image/svg+xml,${encodeURIComponent(
 const GONE_MS = 1200;
 
 /** The desktop legend's corner box (bottom-left), for checking it clears the dial. */
-const LEGEND_BOX = { width: 150, height: 124, inset: 28 };
+const LEGEND_BOX = { width: 150, height: 150, inset: 28 };
 
 /** How the dial describes the person you are in a conversation with. */
 const LIVE_LABEL: Record<DialLive["phase"], string> = {
@@ -74,6 +78,7 @@ function describe(peer: PeerDot, me: PublicSelf, now: Date): PersonView {
     hoursApart: apart,
     dayWord: DAY_WORDS[partOfDay(peer, now, minutes)],
     km: distanceKm(me, peer),
+    daybreak: daybreak(peer, now),
   };
 }
 
@@ -106,6 +111,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const myMinutes = clockMinutes(me.utcOffset, now);
   const people = peers.map((p) => describe(p, me, now));
   const awakeInDark = peers.filter((p) => isDark(p, now)).length;
+  const atDaybreak = people.filter((v) => v.daybreak).length;
 
   const liveId = conn.kind === "idle" ? null : conn.peerId;
   const livePhase: DialLive["phase"] | null =
@@ -130,7 +136,10 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     id: v.peer.id,
     deltaMinutes: Math.round(v.hoursApart * 60),
     state: stateOf(v.peer),
+    dawn: v.daybreak !== null,
     label: `Stranger, ${formatClock(v.minutes)} their ${v.dayWord}, ${formatDistance(v.km)} away${
+      v.daybreak ? ", at daybreak" : ""
+    }${
       v.peer.id === liveId && livePhase ? LIVE_LABEL[livePhase] : v.peer.busy ? ", in another conversation" : ""
     }`,
   }));
@@ -253,6 +262,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           peers={goneNow.length > 0 ? [...peers, ...goneNow] : peers}
           me={pulse.me}
           marks={marks}
+          dawn={people.filter((v) => v.daybreak).map((v) => v.peer.id)}
           recede={conn.kind === "connected"}
           focus={focus}
           rest={rest}
@@ -302,6 +312,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           {peers.length > 0 && (
             <p className="tabular mt-1 text-[13px] text-opaline-400">
               {awakeInDark === 0 ? "Nobody else is in the dark" : `${awakeInDark} of them in the dark`}
+              {atDaybreak > 0 && ` · ${atDaybreak} at daybreak`}
             </p>
           )}
         </header>
