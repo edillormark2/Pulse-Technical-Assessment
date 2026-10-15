@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import { ArrowsInSimple } from "@phosphor-icons/react";
 import Globe, { type GlobeView, type MarkState } from "./Globe";
@@ -26,7 +26,7 @@ import {
   isDark,
   partOfDay,
 } from "@/lib/sun";
-import { DAY_WORDS, formatDistance, useNow } from "@/lib/use-world-clock";
+import { DAY_WORDS, formatDistance, useNow, useViewport } from "@/lib/use-world-clock";
 import { DIAL, dialExtent, useDialLayout } from "@/lib/use-dial-layout";
 
 type Pulse = ReturnType<typeof usePulse>;
@@ -168,6 +168,20 @@ export default function Live({ pulse }: { pulse: Pulse }) {
     };
   }, [ringing]);
 
+  // On phones a card can rise past the space kept for it: marks it would cover
+  // step aside instead of peeking out sliced at its edge.
+  const { height: viewportHeight } = useViewport();
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const sheetRef = useCallback((el: HTMLDivElement) => {
+    const observer = new ResizeObserver(() => setSheetHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      setSheetHeight(0);
+    };
+  }, []);
+  const coverTop = layout.compact && sheetHeight > 0 ? viewportHeight - sheetHeight : null;
+
   const [chatOverVideo, setChatOverVideo] = useState(false);
   const inChat = conn.kind === "connected";
   const videoActive = pulse.video === "active";
@@ -252,6 +266,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
           people={dialPeople}
           live={liveId && livePhase ? { id: liveId, phase: livePhase } : null}
           compact={layout.compact}
+          coverTop={coverTop}
           onSelect={(id) => select(id, true)}
         />
 
@@ -327,6 +342,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         card && (
           <div
             // The idle note sits centred in the sheet's space; cards rise from the bottom.
+            ref={sheetRef}
             data-panel="sheet"
             className={clsx(
               "absolute inset-x-0 bottom-0 px-3 pb-[max(12px,env(safe-area-inset-bottom))]",

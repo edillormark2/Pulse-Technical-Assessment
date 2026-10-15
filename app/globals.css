@@ -244,6 +244,7 @@
    * you is red and pulsing; someone who just left fades out.
    */
   .mark {
+    position: relative;
     display: block;
     width: 9px;
     height: 9px;
@@ -282,10 +283,23 @@
     background: var(--color-signal);
     transform: scale(1.45);
   }
+  /* Asking you: a red dot inside a red ring, so it differs from talking even
+     standing still; the pulse rides on top of it. */
   .mark[data-state="ringing"] {
     background: var(--color-signal);
-    transform: scale(1.45);
-    animation: dot-ring 1.4s var(--ease-out) infinite;
+    transform: scale(1.1);
+    box-shadow:
+      0 0 0 2px var(--color-lacquer-900),
+      0 0 0 3.5px var(--color-signal);
+  }
+  .mark[data-state="ringing"]::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 999px;
+    border: 2px solid var(--color-signal);
+    opacity: 0;
+    animation: ring-out 1.4s var(--ease-out) infinite;
   }
   .mark[data-state="gone"] {
     background: transparent;
@@ -294,7 +308,8 @@
     animation: mark-gone 1200ms var(--ease-out) forwards;
   }
   /* In the legend the marks hold still. */
-  .mark.mark--static[data-state] {
+  .mark.mark--static[data-state],
+  .mark.mark--static[data-state]::after {
     animation: none;
   }
   /* On the globe, a dark outline lifts a mark off the land. */
@@ -499,6 +514,16 @@
     opacity: 0;
   }
 }
+@keyframes ring-out {
+  from {
+    opacity: 0.7;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
 @keyframes mark-gone {
   to {
     opacity: 0;
@@ -560,11 +585,17 @@
    wordmark and of every panel. */
 @media (max-width: 767.98px) {
   .mapboxgl-control-container > .mapboxgl-ctrl-bottom-right {
-    top: calc(max(20px, env(safe-area-inset-top)) + 64px);
+    top: calc(max(20px, env(safe-area-inset-top)) + 66px);
     bottom: auto;
+    right: 12px;
+    display: flex;
+    flex-direction: row-reverse; /* the (i) at the end of the line */
+    align-items: center;
+    gap: 6px;
   }
   .mapboxgl-control-container > .mapboxgl-ctrl-bottom-right > .mapboxgl-ctrl {
-    clear: none;
+    float: none;
+    margin: 0;
   }
 }
 
@@ -591,14 +622,6 @@
 @media (hover: hover) and (pointer: fine) {
   .globe-dot:hover .mark {
     transform: scale(1.5);
-  }
-}
-@keyframes dot-ring {
-  from {
-    box-shadow: 0 0 0 2px var(--color-lacquer-900), 0 0 0 2px rgb(229 72 58 / 0.6);
-  }
-  to {
-    box-shadow: 0 0 0 2px var(--color-lacquer-900), 0 0 0 14px rgb(229 72 58 / 0);
   }
 }
 

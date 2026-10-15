@@ -82,6 +82,7 @@ export default function Dial({
   live,
   compact,
   reveal = false,
+  coverTop = null,
   onSelect,
 }: {
   center: { x: number; y: number } | null;
@@ -96,6 +97,8 @@ export default function Dial({
   compact: boolean;
   /** Light the hours up as the ring first appears (the entry screen). */
   reveal?: boolean;
+  /** Phones: where a panel's top edge sits on screen; marks under it step aside. */
+  coverTop?: number | null;
   onSelect: (id: string) => void;
 }) {
   const g = compact ? DIAL.compact : DIAL.desktop;
@@ -265,16 +268,23 @@ export default function Dial({
           {placed.map(({ person, angle }, i) => {
             const [x, y] = polar(c, track, angle);
             const gone = person.state === "gone";
+            // Under a phone's panel (or touching its edge), a mark steps aside.
+            const covered = coverTop !== null && center.y - c + y > coverTop - 12;
+            const away = gone || covered;
             return (
-              <li key={person.id} aria-hidden={gone || undefined}>
+              <li key={person.id} aria-hidden={away || undefined}>
                 <button
                   type="button"
                   aria-label={person.label}
                   aria-pressed={person.state === "selected"}
                   onClick={() => onSelect(person.id)}
-                  disabled={!visible || gone}
-                  tabIndex={gone ? -1 : undefined}
-                  className={clsx("dial-mark pointer-events-auto", revealNow && "dial-mark--reveal")}
+                  disabled={!visible || away}
+                  tabIndex={away ? -1 : undefined}
+                  className={clsx(
+                    "dial-mark transition-opacity duration-200",
+                    covered ? "opacity-0" : "pointer-events-auto",
+                    revealNow && "dial-mark--reveal",
+                  )}
                   style={{
                     left: x,
                     top: y,
