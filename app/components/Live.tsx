@@ -14,6 +14,7 @@ import EndingCard from "./EndingCard";
 import VideoStage from "./VideoStage";
 import HourFace from "./HourFace";
 import Legend from "./Legend";
+import type { Sky } from "./Daybreak";
 import type { usePulse } from "@/lib/use-pulse";
 import type { PeerDot, PublicSelf } from "@/lib/types";
 import { localUtcOffset } from "@/lib/api";
@@ -90,6 +91,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lng: number; key: string } | null>(null);
   const [rest, setRest] = useState(0);
+  const [heldSky, setHeldSky] = useState<{ peerId: string; sky: Sky } | null>(null);
 
   // Someone who leaves keeps a fading mark for a moment, so nobody just blinks out.
   const [lastPeers, setLastPeers] = useState(peers);
@@ -112,6 +114,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const people = peers.map((p) => describe(p, me, now));
   const awakeInDark = peers.filter((p) => isDark(p, now)).length;
   const atDaybreak = people.filter((v) => v.daybreak).length;
+  const myDaybreak = pulse.me ? daybreak(pulse.me, now) : null;
 
   const liveId = conn.kind === "idle" ? null : conn.peerId;
   const livePhase: DialLive["phase"] | null =
@@ -167,17 +170,21 @@ export default function Live({ pulse }: { pulse: Pulse }) {
 
   function ask() {
     if (!selected) return;
-    pulse.requestConnection(selected.peer.id);
+    pulse.requestConnection(selected.peer.id, selected.daybreak ? "sunrise" : undefined);
     setSelectedId(null);
   }
+
+  // Asked to watch your sunrise: believed only while your sun really is rising.
+  const sunriseAsk = conn.kind === "incoming" && conn.intent === "sunrise" ? (myDaybreak?.sunrise ?? null) : null;
 
   // A request should be noticeable even from another tab: the title says so
   // and the tab's icon carries the red mark until it is answered.
   const ringing = conn.kind === "incoming";
+  const ringTitle = sunriseAsk ? "Someone wants to watch your sunrise" : "Someone wants to talk";
   useEffect(() => {
     if (!ringing) return;
     const previous = document.title;
-    document.title = "Someone wants to talk · Pulse";
+    document.title = `${ringTitle} · Pulse`;
     const icons = [...document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')];
     const hrefs = icons.map((link) => link.href);
     for (const link of icons) link.href = RINGING_ICON;
@@ -185,7 +192,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
       document.title = previous;
       icons.forEach((link, i) => (link.href = hrefs[i]));
     };
-  }, [ringing]);
+  }, [ringing, ringTitle]);
 
   // On phones a card can rise past the space kept for it: marks it would cover
   // step aside instead of peeking out sliced at its edge.
@@ -206,6 +213,21 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   const videoActive = pulse.video === "active";
   const livePersonView = pulse.livePeer ? describe(pulse.livePeer, me, now) : livePerson;
 
+  // The sunrise a conversation is about: theirs when it is near, else yours.
+  // Once it shows in a conversation it stays to the end, past daybreak.
+  const skyNow: Sky | null = livePersonView?.daybreak
+    ? {
+        place: livePersonView.peer,
+        sunrise: livePersonView.daybreak.sunrise,
+        utcOffset: livePersonView.peer.utcOffset ?? me.utcOffset + livePersonView.hoursApart * 60,
+        whose: "their",
+      }
+    : liveId && myDaybreak
+      ? { place: me, sunrise: myDaybreak.sunrise, utcOffset: me.utcOffset, whose: "your" }
+      : null;
+  if (inChat && liveId && skyNow && heldSky?.peerId !== liveId) setHeldSky({ peerId: liveId, sky: skyNow });
+  const sky = inChat && heldSky?.peerId === liveId ? heldSky.sky : skyNow;
+
   // Exactly one card at a time, chosen by the state of the conversation.
   // The chat and its goodbye share one size, so ending never jumps.
   const chatHeight = layout.compact ? "h-[min(560px,62dvh)]" : "h-[min(640px,calc(100dvh-48px))]";
@@ -213,7 +235,14 @@ export default function Live({ pulse }: { pulse: Pulse }) {
   if (pulse.ending) {
     card = <EndingCard messages={pulse.ending.messages} className={chatHeight} />;
   } else if (conn.kind === "incoming") {
-    card = <IncomingCard person={livePersonView} onAccept={pulse.acceptIncoming} onDecline={pulse.declineIncoming} />;
+    card = (
+      <IncomingCard
+        person={livePersonView}
+        sunrise={sunriseAsk}
+        onAccept={pulse.acceptIncoming}
+        onDecline={pulse.declineIncoming}
+      />
+    );
   } else if (conn.kind === "requesting" || conn.kind === "connecting") {
     card = (
       <CallCard
@@ -221,6 +250,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         phase={conn.kind === "requesting" ? "calling" : "connecting"}
         caller={conn.kind === "requesting" || pulse.caller === true}
         link={pulse.link}
+        sky={sky}
         onCancel={conn.kind === "requesting" ? pulse.cancelRequest : () => pulse.endConnection()}
       />
     );
@@ -230,6 +260,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
         person={livePersonView}
         messages={pulse.messages}
         video={pulse.video}
+        sky={sky}
         onSend={pulse.sendChat}
         onAskVideo={pulse.startVideoRequest}
         onCancelVideo={pulse.cancelVideoRequest}
@@ -347,6 +378,7 @@ export default function Live({ pulse }: { pulse: Pulse }) {
       {videoActive && (
         <VideoStage
           person={livePersonView}
+          sky={sky}
           localStream={pulse.localStream}
           remoteStream={pulse.remoteStream}
           micOn={pulse.micOn}

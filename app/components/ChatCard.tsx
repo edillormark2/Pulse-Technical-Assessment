@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { PaperPlaneRight, PhoneDisconnect, VideoCamera } from "@phosphor-icons/react";
 import type { PersonView } from "./Live";
+import { SkyStrip, type Sky } from "./Daybreak";
 import type { ChatMessage, VideoState } from "@/lib/use-pulse";
 import { formatClock } from "@/lib/sun";
 import { formatDistance } from "@/lib/use-world-clock";
@@ -14,6 +15,7 @@ export default function ChatCard({
   person,
   messages,
   video,
+  sky,
   onSend,
   onAskVideo,
   onCancelVideo,
@@ -25,6 +27,8 @@ export default function ChatCard({
   person: PersonView | null;
   messages: ChatMessage[];
   video: VideoState;
+  /** The sunrise this conversation is watching, if there is one. */
+  sky: Sky | null;
   onSend: (text: string) => void;
   onAskVideo: () => void;
   onCancelVideo: () => void;
@@ -89,28 +93,31 @@ export default function ChatCard({
         </div>
       </header>
 
-      {/* Video requests are a strip of the panel between hairlines, not a card in a card. */}
-      {video === "requesting" && (
-        <div className="flex items-center justify-between gap-3 border-y border-lacquer-700 px-6 py-3" role="status">
-          <p className="text-[14px] text-opaline-200">Asking to turn on video…</p>
-          <button type="button" className="text-[14px] font-medium text-opaline-50 underline underline-offset-4" onClick={onCancelVideo}>
-            Cancel
-          </button>
-        </div>
-      )}
-      {video === "incoming" && (
-        <div className="border-y border-lacquer-700 px-6 py-3" role="alert">
-          <p className="text-[14px] text-opaline-50">They&rsquo;d like to turn on video.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" className="btn btn-quiet h-10 text-[14px]" onClick={onDeclineVideo}>
-              Not now
-            </button>
-            <button type="button" className="btn btn-primary h-10 text-[14px]" onClick={onAcceptVideo}>
-              Turn on
+      {/* The sunrise and video requests are strips of the panel between hairlines, not cards in a card. */}
+      <div className="divide-y divide-lacquer-700 border-y border-lacquer-700 empty:hidden">
+        {sky && <SkyStrip sky={sky} onAskToSee={sky.whose === "their" && video === "none" ? onAskVideo : undefined} />}
+        {video === "requesting" && (
+          <div className="flex items-center justify-between gap-3 px-6 py-3" role="status">
+            <p className="text-[14px] text-opaline-200">Asking to turn on video…</p>
+            <button type="button" className="text-[14px] font-medium text-opaline-50 underline underline-offset-4" onClick={onCancelVideo}>
+              Cancel
             </button>
           </div>
-        </div>
-      )}
+        )}
+        {video === "incoming" && (
+          <div className="px-6 py-3" role="alert">
+            <p className="text-[14px] text-opaline-50">They&rsquo;d like to turn on video.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" className="btn btn-quiet h-10 text-[14px]" onClick={onDeclineVideo}>
+                Not now
+              </button>
+              <button type="button" className="btn btn-primary h-10 text-[14px]" onClick={onAcceptVideo}>
+                Turn on
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <ol ref={listRef} className="flex-1 space-y-1.5 overflow-y-auto px-4 pb-2" aria-live="polite" aria-label="Messages">
         {messages.length === 0 && (

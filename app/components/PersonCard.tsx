@@ -4,6 +4,7 @@ import { X } from "@phosphor-icons/react";
 import type { PersonView } from "./Live";
 import { formatClock } from "@/lib/sun";
 import { formatDistance, formatHoursApart } from "@/lib/use-world-clock";
+import { SunriseLine } from "./Daybreak";
 
 /** Someone you picked: their hour billed largest, then yours, then the gap. */
 export default function PersonCard({
@@ -44,13 +45,14 @@ export default function PersonCard({
       <p className="tabular mt-5 text-[15px] text-opaline-200">
         {formatHoursApart(person.hoursApart)} · {formatDistance(person.km)}
       </p>
+      {person.daybreak && <SunriseLine sunrise={person.daybreak.sunrise} whose="their" className="mt-4" />}
 
       {busy ? (
         <p className="mt-6 text-[15px] text-opaline-200">In another conversation right now.</p>
       ) : (
         <>
           <button type="button" className="btn btn-primary mt-6 w-full" onClick={onAsk}>
-            Ask to talk
+            {person.daybreak ? "Watch their sunrise" : "Ask to talk"}
           </button>
           <p className="mt-3 text-[13px] text-opaline-400">They can say yes or no. Nothing is kept.</p>
         </>

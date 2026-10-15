@@ -11,6 +11,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import type { PersonView } from "./Live";
+import { SunriseLine, type Sky } from "./Daybreak";
 import { formatClock } from "@/lib/sun";
 
 function useStream(ref: React.RefObject<HTMLVideoElement | null>, stream: MediaStream | null) {
@@ -23,6 +24,7 @@ function useStream(ref: React.RefObject<HTMLVideoElement | null>, stream: MediaS
 /** Face to face. Their hour stays in the corner: you are still on the dial. */
 export default function VideoStage({
   person,
+  sky,
   localStream,
   remoteStream,
   micOn,
@@ -34,6 +36,8 @@ export default function VideoStage({
   style,
 }: {
   person: PersonView | null;
+  /** The sunrise this conversation is watching, if there is one. */
+  sky: Sky | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   micOn: boolean;
@@ -63,6 +67,7 @@ export default function VideoStage({
         <div className="pointer-events-none absolute left-5 top-5 rounded-2xl bg-lacquer-900/80 px-4 py-2.5">
           <p className="numeral text-[28px] leading-none text-signal">{formatClock(person.minutes)}</p>
           <p className="mt-1 text-[12px] text-opaline-200">their {person.dayWord}</p>
+          {sky && <SunriseLine sunrise={sky.sunrise} whose={sky.whose} small className="mt-2" />}
         </div>
       )}
 

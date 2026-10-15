@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import type { PersonView } from "./Live";
+import { SunriseLine, type Sky } from "./Daybreak";
 import { formatClock } from "@/lib/sun";
 
 type Stage = { label: string; detail?: string; status: "done" | "current" | "pending" };
@@ -24,6 +25,7 @@ export default function CallCard({
   phase,
   caller,
   link,
+  sky,
   onCancel,
 }: {
   person: PersonView | null;
@@ -31,6 +33,8 @@ export default function CallCard({
   /** You asked (true) or you said yes to their request (false). */
   caller: boolean;
   link: RTCPeerConnectionState | null;
+  /** A sunrise this conversation is about, if one is near. */
+  sky: Sky | null;
   onCancel: () => void;
 }) {
   const stages: Stage[] = caller
@@ -56,7 +60,7 @@ export default function CallCard({
     <section className="card card-enter w-full" aria-labelledby="call-card-title">
       <h2 id="call-card-title" className="flex items-center gap-2.5 text-[15px] text-opaline-200">
         <span className="mark" data-state={phase} aria-hidden="true" />
-        {caller ? "Asking a stranger to talk" : "Connecting"}
+        {!caller ? "Connecting" : sky?.whose === "their" ? "Asking to watch their sunrise" : "Asking a stranger to talk"}
       </h2>
       {person && (
         <>
@@ -64,6 +68,7 @@ export default function CallCard({
           <p className="mt-2 text-[14px] text-opaline-400">their {person.dayWord}</p>
         </>
       )}
+      {sky && <SunriseLine sunrise={sky.sunrise} whose={sky.whose} className="mt-4" />}
 
       <ol className="mt-7 space-y-4" aria-live="polite">
         {stages.map((s) => (

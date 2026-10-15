@@ -324,6 +324,31 @@
       var(--color-opaline-200) calc(100% - 5px)
     );
   }
+  /* Daybreak's sky: the horizon brightens and the sun fills as it clears it.
+     The sun glides between the once-a-second readings. */
+  .sky-horizon {
+    stroke: var(--color-opaline-200);
+    stroke-width: 1.5;
+    transition:
+      stroke 600ms var(--ease-out),
+      stroke-width 600ms var(--ease-out);
+  }
+  .sky-horizon--risen {
+    stroke: var(--color-opaline-50);
+    stroke-width: 2;
+  }
+  .sky-sun {
+    fill: var(--color-lacquer-850);
+    stroke: var(--color-opaline-50);
+    stroke-width: 2;
+    transition:
+      cx 1s linear,
+      cy 1s linear,
+      fill 600ms var(--ease-out);
+  }
+  .sky-sun--risen {
+    fill: var(--color-opaline-50);
+  }
   /* In the legend the marks hold still. */
   .mark.mark--static[data-state] {
     animation: none;
