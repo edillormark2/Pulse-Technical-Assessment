@@ -283,23 +283,25 @@
     background: var(--color-signal);
     transform: scale(1.45);
   }
-  /* Asking you: a red dot inside a red ring, so it differs from talking even
-     standing still; the pulse rides on top of it. */
+  /* Asking you: a red dot carrying a short tick, the head of the sweep hand
+     that counts their 30 seconds. It differs from talking even standing
+     still, and breathes while it waits. Never rings or crosshairs: nobody
+     here is a target. */
   .mark[data-state="ringing"] {
     background: var(--color-signal);
-    transform: scale(1.1);
-    box-shadow:
-      0 0 0 2px var(--color-lacquer-900),
-      0 0 0 3.5px var(--color-signal);
+    transform: scale(1.35);
+    animation: mark-breathe 1.4s var(--ease-in-out) infinite alternate;
   }
-  .mark[data-state="ringing"]::after {
+  .mark[data-state="ringing"]::before {
     content: "";
     position: absolute;
-    inset: -4px;
-    border-radius: 999px;
-    border: 2px solid var(--color-signal);
-    opacity: 0;
-    animation: ring-out 1.4s var(--ease-out) infinite;
+    left: 50%;
+    bottom: calc(100% + 1px);
+    width: 2px;
+    height: 5px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--color-signal);
   }
   .mark[data-state="gone"] {
     background: transparent;
@@ -308,8 +310,7 @@
     animation: mark-gone 1200ms var(--ease-out) forwards;
   }
   /* In the legend the marks hold still. */
-  .mark.mark--static[data-state],
-  .mark.mark--static[data-state]::after {
+  .mark.mark--static[data-state] {
     animation: none;
   }
   /* On the globe, a dark outline lifts a mark off the land. */
@@ -514,14 +515,12 @@
     opacity: 0;
   }
 }
-@keyframes ring-out {
+@keyframes mark-breathe {
   from {
-    opacity: 0.7;
-    transform: scale(0.8);
+    transform: scale(1.15);
   }
   to {
-    opacity: 0;
-    transform: scale(2.2);
+    transform: scale(1.45);
   }
 }
 @keyframes mark-gone {
