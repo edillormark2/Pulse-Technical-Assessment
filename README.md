@@ -7,12 +7,12 @@ no accounts, and nothing is stored.
 This repository is **my build of the Pulse take-home assessment**, covering all four
 phases.
 
-| | |
-|---|---|
-| **Live app (my deployment)** | **https://pulse-technical-assessment-alpha.vercel.app** |
-| **Source (my repository)** | https://github.com/edillormark2/Pulse-Technical-Assessment |
-| **Demo video (1:34)** | [Watch the walkthrough](https://pulse-technical-assessment-alpha.vercel.app/demo/pulse-demo-v1.mp4), also on the app's entry screen |
-| **Write-up** | [NOTES.md](NOTES.md) (one section per phase) · [DESIGN.md](DESIGN.md) (the design system) |
+- **Live app (my deployment):** https://pulse-technical-assessment-alpha.vercel.app
+- **Source (my repository):** https://github.com/edillormark2/Pulse-Technical-Assessment
+- **Demo video (1:34):** [watch the walkthrough](https://pulse-technical-assessment-alpha.vercel.app/demo/pulse-demo-v1.mp4),
+  also on the app's entry screen
+- **Write-up:** [NOTES.md](NOTES.md), one section per phase, and [DESIGN.md](DESIGN.md),
+  the design system
 
 > **The original app is a separate deployment.** This repository was cloned from the
 > assessment's starting point, which is deployed at https://pulse-silk-eta.vercel.app/
